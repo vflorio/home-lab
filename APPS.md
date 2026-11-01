@@ -43,9 +43,6 @@
 - OnlyOffice (Office suite)
 - Immich (Photo management)
 
-
 TODO:
-- Guacamole RDP (cambio pass admin etc)
 - Servarr stack + Navidrome
-- Aggiornamenti: apt su tutti i server e immagini, Authentik a step.
-- Terraform di Proxmox: import dello state per le 5 VM.
+- Aggiornamenti: apt su tutti i server e immagini
