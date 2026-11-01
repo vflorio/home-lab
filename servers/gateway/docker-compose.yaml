@@ -1,0 +1,266 @@
+###########################################################################
+# HomeLab Gateway/Security Server
+# Sicurezza, TLS, Accesso Remoto, Autenticazione
+# IP: 192.168.1.190 (gateway.intranet.vflorio.com)
+###########################################################################
+
+networks:
+  gateway:
+    name: gateway
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: ${DOCKER_SUBNET:?err}
+          gateway: ${DOCKER_GATEWAY:?err}
+
+volumes:
+  # local disk on purpose: Postgres/SQLite on NFS are unsafe (locking/corruption)
+  authentik-postgres-data:
+    driver: local
+  crowdsec-db:
+    driver: local
+  crowdsec-config:
+    driver: local
+  tailscale-state:
+    driver: local
+
+secrets:
+  crowdsec_bouncer_key:
+    environment: CROWDSEC_BOUNCER_KEY
+
+services:
+  ###########################################################################
+  # Traefik - Reverse Proxy & TLS Management
+  ###########################################################################
+  traefik:
+    image: traefik:v3.5.3@sha256:84eb6c0e67c99fa026bf1bf4b0afd9ad44350d375b4ebc5049c5f70543a729d6
+    container_name: traefik
+    restart: unless-stopped
+    networks:
+      - gateway
+    #user: root
+    environment:
+      - TZ=${TIMEZONE:?err}
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN:?err}
+    # LAN IPv4 only: nothing listens on the public IPv6 of the VM.
+    # Tailnet clients get here through the Tailscale subnet router on this host
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_REVERSE_PROXY_HTTP:?err}:80
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_REVERSE_PROXY_HTTPS:?err}:443
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_TRAEFIK_METRICS:?err}:8082
+    secrets:
+      - crowdsec_bouncer_key
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${PATH_DATA:?err}/logs/traefik:/var/log
+      - ${PATH_DATA:?err}/traefik/letsencrypt/:/letsencrypt/
+      - ./traefik:/etc/traefik
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.traefik.service=api@internal
+      - traefik.http.routers.traefik.rule=Host(`traefik.${INTRANET_DOMAIN:?err}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))
+      - traefik.http.routers.traefik.entrypoints=websecure
+      - traefik.http.routers.traefik.middlewares=authentik-forwardauth@file
+
+  ###########################################################################
+  # Authentik - Authentication & SSO
+  ###########################################################################
+  authentik:
+    image: ghcr.io/goauthentik/server:${AUTHENTIK_VERSION:?err}
+    container_name: authentik
+    restart: unless-stopped
+    networks:
+      - gateway
+#    user: ${PUID:?err}:${PGID:?err}
+    command: server
+    environment:
+      - TZ=${TIMEZONE:?err}
+      - AUTHENTIK_LOG_LEVEL=info # info, warning, error, debug and trace
+      - AUTHENTIK_SECRET_KEY=${AUTHENTIK_SECRET_KEY:?err}
+      - AUTHENTIK_REDIS__HOST=valkey
+      - AUTHENTIK_POSTGRESQL__HOST=authentik-postgresql
+      - AUTHENTIK_POSTGRESQL__NAME=${AUTHENTIK_DATABASE:?err}
+      - AUTHENTIK_POSTGRESQL__USER=${POSTGRES_USER:?err}
+      - AUTHENTIK_POSTGRESQL__PASSWORD=${POSTGRES_PASSWORD:?err}
+      - AUTHENTIK_ERROR_REPORTING__ENABLED=${AUTHENTIK_ERROR_REPORTING__ENABLED:?err}
+      - AUTHENTIK_EMAIL__HOST=${EMAIL_SERVER_HOST}
+      - AUTHENTIK_EMAIL__PORT=${EMAIL_SERVER_PORT}
+      - AUTHENTIK_EMAIL__USERNAME=${EMAIL_ADDRESS}
+      - AUTHENTIK_EMAIL__PASSWORD=${EMAIL_PASSWORD}
+      - AUTHENTIK_EMAIL__USE_TLS=${EMAIL_TLS}
+      - AUTHENTIK_EMAIL__USE_SSL=${EMAIL_SSL}
+      - AUTHENTIK_EMAIL__FROM=${EMAIL_SENDER}
+      - AUTHENTIK_EMAIL__TIMEOUT=10
+      - INTRANET_DOMAIN=${INTRANET_DOMAIN:?err}  # used by the homelab blueprint
+    volumes:
+      - ${PATH_DATA:?err}/authentik/media:/media
+      - ${PATH_DATA:?err}/authentik/templates:/templates
+      - ./authentik/blueprints:/blueprints/custom:ro
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_AUTHENTIK:?err}:9000
+    depends_on:
+      authentik-postgresql:
+        condition: service_healthy
+        restart: true
+      valkey:
+        condition: service_healthy
+        restart: true
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.authentik.service=authentik
+      - traefik.http.routers.authentik.rule=Host(`auth.${INTRANET_DOMAIN:?err}`)
+      - traefik.http.routers.authentik.entrypoints=websecure
+      # Do not add authentik-forwardauth@file to middlewares, otherwise other applications can't authenticate
+      - traefik.http.services.authentik.loadbalancer.server.scheme=http
+      - traefik.http.services.authentik.loadbalancer.server.port=9000
+
+  authentic-worker:
+    image: ghcr.io/goauthentik/server:${AUTHENTIK_VERSION:?err}
+    container_name: authentik-worker
+    restart: unless-stopped
+    networks:
+      - gateway
+#    user: ${PUID:?err}:${PGID:?err}
+    command: worker
+    environment:
+      - TZ=${TIMEZONE:?err}
+      - AUTHENTIK_SECRET_KEY=${AUTHENTIK_SECRET_KEY:?err}
+      - AUTHENTIK_REDIS__HOST=valkey
+      - AUTHENTIK_POSTGRESQL__HOST=authentik-postgresql
+      - AUTHENTIK_POSTGRESQL__NAME=${AUTHENTIK_DATABASE:?err}
+      - AUTHENTIK_POSTGRESQL__USER=${POSTGRES_USER:?err}
+      - AUTHENTIK_POSTGRESQL__PASSWORD=${POSTGRES_PASSWORD:?err}
+      - AUTHENTIK_ERROR_REPORTING__ENABLED=${AUTHENTIK_ERROR_REPORTING__ENABLED:?err}
+      - INTRANET_DOMAIN=${INTRANET_DOMAIN:?err}  # used by the homelab blueprint
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${PATH_DATA:?err}/authentik/certs:/certs
+      - ${PATH_DATA:?err}/authentik/media:/media
+      - ${PATH_DATA:?err}/authentik/templates:/templates
+      - ./authentik/blueprints:/blueprints/custom:ro  # applied by the worker
+    depends_on:
+      authentik-postgresql:
+        condition: service_healthy
+        restart: true
+      valkey:
+        condition: service_healthy
+        restart: true
+
+  ###########################################################################
+  # CrowdSec - Security & Intrusion Detection
+  # Reads the Traefik access log, LAPI + AppSec WAF for the Traefik bouncer plugin
+  ###########################################################################
+  crowdsec:
+    image: crowdsecurity/crowdsec:v1.7.8
+    container_name: crowdsec
+    restart: unless-stopped
+    networks:
+      - gateway
+    environment:
+      - TZ=${TIMEZONE:?err}
+      - COLLECTIONS=crowdsecurity/traefik crowdsecurity/http-cve crowdsecurity/base-http-scenarios crowdsecurity/appsec-virtual-patching crowdsecurity/appsec-generic-rules
+      # registers the Traefik bouncer at startup with the same key Traefik reads from its secret
+      - BOUNCER_KEY_traefik=${CROWDSEC_BOUNCER_KEY:?err}
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_CROWDSEC_METRICS:?err}:6060 # Prometheus metrics
+    depends_on:
+      - traefik
+    volumes:
+      - crowdsec-db:/var/lib/crowdsec/data/
+      - crowdsec-config:/etc/crowdsec/
+      - ${PATH_DATA:?err}/logs/traefik:/var/log/traefik:ro
+      - ./crowdsec/acquis.yaml:/etc/crowdsec/acquis.yaml:ro
+      - ./crowdsec/tailnet-whitelist.yaml:/etc/crowdsec/parsers/s02-enrich/tailnet-whitelist.yaml:ro
+
+  ###########################################################################
+  # Tailscale - VPN (subnet router for 192.168.1.0/24)
+  # Runs in the host network namespace so tailnet clients reach the LAN (and Traefik
+  # on LOCAL_DOCKER_IP) through this VM. Approve the route in the Tailscale admin console
+  ###########################################################################
+  tailscale:
+    image: tailscale/tailscale:v1.104.4
+    container_name: tailscale
+    hostname: gateway
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - TZ=${TIMEZONE:?err}
+      - TS_AUTHKEY=${TS_AUTHKEY:?err}
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_USERSPACE=false
+      - TS_ROUTES=${LOCAL_SUBNET:?err}
+      - TS_ACCEPT_DNS=false  # the gateway keeps resolving through bind9 on the LAN
+      - TS_EXTRA_ARGS=--advertise-tags=tag:homelab
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+
+  ###########################################################################
+  # Portainer - Docker Management
+  ###########################################################################
+  portainer-agent:
+    container_name: portainer-agent
+    image: "portainer/agent:2.33.2@sha256:a454c023f4b79ae308e372e5a4ab0d37961d6d8ad88fe5945544435203ded198"  # must match portainer-ce version on management
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/volumes:/var/lib/docker/volumes
+    restart: unless-stopped
+    ports:
+      - "${LOCAL_DOCKER_IP:?err}:${PORT_PORTAINER_AGENT:?err}:9001"
+    environment:
+      - AGENT_CLUSTER_ADDR="192.168.1.191"
+    networks:
+      - gateway
+
+  ###########################################################################
+  # PostgreSQL - Shared Database
+  ###########################################################################
+  authentik-postgresql:
+    image: docker.io/library/postgres:18  # major upgrades only via dump/restore
+    container_name: authentik-postgresql
+    restart: unless-stopped
+    networks:
+      - gateway
+#    user: ${PUID:?err}:${PGID:?err}
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_POSTGRES:?err}:5432
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "${AUTHENTIK_DATABASE}"]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 5s
+    volumes:
+      - authentik-postgres-data:/var/lib/postgresql  # postgres 18+ keeps data in /var/lib/postgresql/18/docker
+    environment:
+      - TZ=${TIMEZONE:?err}
+      - POSTGRES_DB=${AUTHENTIK_DATABASE:?err}
+      - POSTGRES_USER=${POSTGRES_USER:?err}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?err}
+
+  ###########################################################################
+  # Valkey - Redis Cache
+  ###########################################################################
+  valkey:
+    image: valkey/valkey:8.1.3-alpine
+    container_name: valkey
+    command: --save 60 1 --loglevel warning --notify-keyspace-events KEA  # traefik redis provider needs keyspace events to see changes
+    restart: unless-stopped
+    networks:
+      - gateway
+#    user: ${PUID:?err}:${PGID:?err}
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_VALKEY:?err}:6379  # traefik-kop on the other servers
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli ping | grep PONG"]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 3s
+    volumes:
+      - ${PATH_DATA:?err}/valkey:/data

@@ -1,0 +1,17 @@
+access.log
+acme.json
+packer_cache
+.terraform
+.terraform.lock*
+terraform.tfstate
+terraform.tfstate.backup
+
+terraform/templates
+dns/bind/*.jnl
+
+*.old
+*.old.*
+.env
+*.tfvars
+*.pkrvars.hcl
+ansible/logs

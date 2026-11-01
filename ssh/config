@@ -1,0 +1,145 @@
+AddKeysToAgent yes
+#Windows
+#IdentityFile C:\Users\v.florio\.ssh\id_ed25519_carbon
+#Linux
+IdentityFile ~/.ssh/id_ed25519_carbon
+
+# Devices
+
+Host workstation (carbon)
+  HostName 192.168.1.2
+  User vflorio
+
+Host server (silicon)
+  HostName 192.168.1.1
+  User vflorio
+
+Host macmini (nitrogen)
+  HostName 192.168.1.3
+  User vflorio
+
+Host tablet-android (boron)
+  HostName 192.168.1.4
+  User vflorio
+
+Host smartphone-ios (phosphorus)
+  HostName 192.168.1.5
+  User vflorio
+
+Host tv-hisense (sulfur)
+  HostName 192.168.1.6
+  User vflorio
+
+Host tv-android (chlorine)
+  HostName 192.168.1.7
+  User vflorio
+
+Host laptop-discovery (argon)
+  HostName 192.168.1.8
+  User vflorio
+
+Host laptop-kineton (neon)
+  HostName 192.168.1.9
+  User vflorio
+
+# ActivaStick Mini PCs
+
+Host activastick-0
+  HostName 192.168.1.33
+  User vflorio
+
+Host activastick-1
+  HostName 192.168.1.34
+  User vflorio
+
+Host activastick-2
+  HostName 192.168.1.35
+  User vflorio
+
+Host activastick-3
+  HostName 192.168.1.36
+  User vflorio
+
+Host activastick-4
+  HostName 192.168.1.37
+  User vflorio
+
+Host activastick-5
+  HostName 192.168.1.38
+  User vflorio
+
+Host activastick-6
+  HostName 192.168.1.39
+  User vflorio
+
+Host activastick-7
+  HostName 192.168.1.40
+  User vflorio
+
+# Infrastructure Services
+
+Host dns
+  HostName 192.168.1.150
+  User vflorio
+
+Host dns.intranet.vflorio.com
+  HostName 192.168.1.150
+  User vflorio
+
+Host nas
+  HostName 192.168.1.151
+  User vflorio
+
+Host nas.intranet.vflorio.com
+  HostName 192.168.1.151
+  User vflorio
+
+Host firewall
+  HostName 192.168.1.152
+  User vflorio
+
+Host firewall.intranet.vflorio.com
+  HostName 192.168.1.152
+  User vflorio
+
+# Homelab Servers
+
+Host gateway
+  HostName 192.168.1.190
+  User vflorio
+
+Host gateway.intranet.vflorio.com
+  HostName 192.168.1.190
+  User vflorio
+
+Host management
+  HostName 192.168.1.191
+  User vflorio
+
+Host management.intranet.vflorio.com
+  HostName 192.168.1.191
+  User vflorio
+
+Host media
+  HostName 192.168.1.192
+  User vflorio
+
+Host media.intranet.vflorio.com
+  HostName 192.168.1.192
+  User vflorio
+
+Host dev
+  HostName 192.168.1.193
+  User vflorio
+
+Host dev.intranet.vflorio.com
+  HostName 192.168.1.193
+  User vflorio
+
+Host cloud
+  HostName 192.168.1.194
+  User vflorio
+
+Host cloud.intranet.vflorio.com
+  HostName 192.168.1.194
+  User vflorio

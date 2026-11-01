@@ -1,0 +1,52 @@
+## Configuring 
+
+Adjust Authentik brand:  
+
+- Admin Interface --> System --> Brands --> Edit "authentik-default"  
+- Title: Homelab - Authentik  
+- Select "Update"  
+
+Force MFA for all users:  
+
+- Admin Interface --> Flows and Stages --> Stages --> Edit "default-authentication-mfa-validation"  
+- Not configured action: Force the user to configure an authenticator  
+- Selected Stages: default-authentication-login (User Login Stage)  
+- Select "Update"  
+
+## Add Application in Authentik
+
+Create Authentik Application:  
+
+- Admin Interface --> Applications --> Create with Provider  
+- Name: Authentik  
+- Slug: authentik  
+- Launch URL: <https://auth.example.com>            <-- change to your domain  
+  - Open in New Tab: No  
+- Select "Next"  
+- Choose A Provider: Proxy Provider  
+- Select "Next"  
+- Name: Provider for Authentik  
+- Authorization flow: default-provider-authorization-explicit-consent (Authorize Application)  
+- Select "Forward auth (domain level)"  
+- Authentication URL: <https://auth.example.com>    <-- change to your domain  
+- Cookie domain: example.com                        <-- change to your domain  
+- Advanced flow settings:  
+- Authentication flow: default-authentication-flow (Welcome to authentik!)  
+- Select "Next"  
+- Configure Bindings - skip this step  
+- Select "Next"  
+- Select "Submit"  
+
+Add application to outposts:  
+
+- Admin Interface --> Applications --> Outposts  
+- Edit: "authentik Embedded Outpost"  
+- Update Outpost:  
+- Select "Authentik" application in "Available Applications" and move across to "Selected Applications"  
+- Select "Update"  
+
+Restart docker stack:  
+
+``` bash
+sudo docker compose down
+sudo docker compose up -d

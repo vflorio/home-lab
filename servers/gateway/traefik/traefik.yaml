@@ -1,0 +1,100 @@
+#########################################################################
+#########################################################################
+#
+# Filename: traefik.yaml        Traefik Static Configuration File
+#
+#########################################################################
+#########################################################################
+
+global:
+  checkNewVersion: true
+  sendAnonymousUsage: true
+
+log:
+  level: INFO    # Options are:  TRACE , DEBUG , INFO , WARN , ERROR , FATAL , and PANIC
+
+accessLog:
+  filePath: /var/log/access.log
+  format: json
+
+api:
+  dashboard: true
+  insecure: false  # dashboard only via the traefik.gateway.intranet router (Authentik)
+
+entryPoints:
+  web:
+    address: :80
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  # LAN + tailnet only. The port is published only on the LAN IPv4 (see docker-compose),
+  # and the intranet chain (ipAllowList + CrowdSec + headers) is applied to EVERY router
+  # on this entrypoint, so a router can't forget it
+  websecure:
+    address: :443
+    http:
+      middlewares:
+        - intranet@file
+      tls:
+        options: default
+        certResolver: letsencrypt
+        domains:
+          # intranet hostnames (<app>.<server>.intranet.vflorio.com), needed because of sniStrict
+          - main: "*.gateway.intranet.vflorio.com"
+          - main: "*.management.intranet.vflorio.com"
+          - main: "*.media.intranet.vflorio.com"
+          - main: "*.dev.intranet.vflorio.com"
+          - main: "*.cloud.intranet.vflorio.com"
+  metrics:
+    address: :8082
+
+metrics:
+  prometheus:
+    entryPoint: metrics
+    manualRouting: true
+    headerLabels:
+      useragent: User-Agent
+    buckets:
+      - 0.1
+      - 0.3
+      - 1.2
+      - 5.0
+
+providers:
+  docker:
+    watch: true
+    endpoint: unix:///var/run/docker.sock
+    exposedByDefault: false
+  file:
+    directory: /etc/traefik
+    watch: true
+  redis:
+    endpoints:
+      - "valkey:6379"
+    db: 1  # Authentik usa DB 0
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      storage: /letsencrypt/acme.json
+      keyType: EC384
+      # Production
+      caServer: https://acme-v02.api.letsencrypt.org/directory
+      # Staging
+      # caServer: https://acme-staging-v02.api.letsencrypt.org/directory 
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - 1.1.1.1:53
+          - 1.0.0.1:53
+        #propagation:
+        #  delayBeforeChecks: 2s
+
+experimental:
+  plugins:
+    crowdsec-bouncer-traefik-plugin:
+      moduleName: github.com/maxlerebourg/crowdsec-bouncer-traefik-plugin
+      version: v1.4.2

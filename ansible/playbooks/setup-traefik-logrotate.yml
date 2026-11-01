@@ -1,0 +1,33 @@
+- hosts: "{{ hosts | default('gateway.intranet.vflorio.com') }}"
+
+  become: yes
+  vars:
+    # host path of ${PATH_DATA}/logs/traefik (see servers/gateway/.env)
+    traefik_log_dir: /mnt/nfs/ssd-0/homelab-data/gateway/logs/traefik
+
+  tasks:
+
+    - name: install logrotate
+      apt:
+        name: logrotate
+
+    # copytruncate keeps the same file, so Traefik (O_APPEND) and Crowdsec keep reading/writing it
+    - name: rotate Traefik access log
+      copy:
+        dest: /etc/logrotate.d/traefik
+        content: |
+          {{ traefik_log_dir }}/access.log {
+              daily
+              maxsize 100M
+              rotate 14
+              compress
+              delaycompress
+              missingok
+              notifempty
+              copytruncate
+          }
+        mode: "0644"
+
+    - name: validate logrotate config
+      command: logrotate --debug /etc/logrotate.d/traefik
+      changed_when: false

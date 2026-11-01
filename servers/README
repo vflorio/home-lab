@@ -1,0 +1,36 @@
+# HomeLab Servers Deployment
+
+## Prerequisites 
+(da root)
+
+```bash
+ansible-playbook -i inventory.ini playbooks/install-docker.yml -e "hosts=servers"
+```
+
+## Manual Sync
+rsync -avz --progress --delete --mkpath ./servers/gateway/ vflorio@gateway.intranet.vflorio.com:~/gateway/
+rsync -avz --progress --delete --mkpath ./servers/management/ vflorio@management.intranet.vflorio.com:~/management/
+rsync -avz --progress --delete --mkpath ./servers/media/ vflorio@media.intranet.vflorio.com:~/media/
+rsync -avz --progress --delete --mkpath ./servers/dev/ vflorio@dev.intranet.vflorio.com:~/dev/
+rsync -avz --progress --delete --mkpath ./servers/cloud/ vflorio@cloud.intranet.vflorio.com:~/cloud/
+
+
+ssh vflorio@gateway.intranet.vflorio.com "cd ~/gateway && docker compose up -d"
+ssh vflorio@management.intranet.vflorio.com "cd ~/management && docker compose up -d"
+ssh vflorio@media.intranet.vflorio.com "cd ~/media && docker compose up -d"
+ssh vflorio@dev.intranet.vflorio.com "cd ~/dev && docker compose up -d"
+ssh vflorio@cloud.intranet.vflorio.com "cd ~/cloud && docker compose up -d"
+
+
+ssh vflorio@gateway.intranet.vflorio.com "cd ~/gateway && docker compose down"
+ssh vflorio@management.intranet.vflorio.com "cd ~/management && docker compose down"
+ssh vflorio@media.intranet.vflorio.com "cd ~/media && docker compose down"
+ssh vflorio@dev.intranet.vflorio.com "cd ~/dev && docker compose down"
+ssh vflorio@cloud.intranet.vflorio.com "cd ~/cloud && docker compose down"
+
+
+ssh vflorio@gateway.intranet.vflorio.com "cd ~/gateway && docker compose restart"
+ssh vflorio@management.intranet.vflorio.com "cd ~/management && docker compose restart"
+ssh vflorio@media.intranet.vflorio.com "cd ~/media && docker compose restart"
+ssh vflorio@dev.intranet.vflorio.com "cd ~/dev && docker compose restart"
+ssh vflorio@cloud.intranet.vflorio.com "cd ~/cloud && docker compose restart"

@@ -1,0 +1,492 @@
+---
+# Homepage services
+# https://gethomepage.dev/configs/services/
+#
+# Description convention (rendered as link chips by custom.js):
+#   "<descrizione> │ 🌐 <host pubblico> │ 🏠 <host intranet> │ 🔌 <ip:porta> │ 🔒 <solo testo>"
+#   🌐 / 🏠 -> https://   🔌 -> http://   (a token with an explicit scheme is used as-is)
+#   🔒 -> not a link (TCP ports, internal endpoints): click copies it
+#
+# href is the public URL when the app is on Cloudflare (dns/cloudflare/dns.tf),
+# otherwise the intranet one. siteMonitor always hits ip:port, bypassing Traefik/Authentik.
+
+###############################################################################
+# SERVIZI
+###############################################################################
+
+- Gateway:
+    - srv-gateway:
+        icon: mdi-router-network
+        ping: 192.168.1.190
+        description: "VM 3100 · 4 vCPU · 4 GB · reverse proxy, SSO, VPN │ 🔒 gateway.intranet.vflorio.com │ 🔒 192.168.1.190"
+
+    - Traefik:
+        icon: traefik.png
+        href: https://traefik.gateway.intranet.vflorio.com/dashboard/
+        siteMonitor: http://192.168.1.190:8082/metrics
+        description: "Reverse proxy & TLS │ 🏠 traefik.gateway.intranet.vflorio.com/dashboard/ │ 🔌 metriche 192.168.1.190:8082"
+
+    - Authentik:
+        icon: authentik.png
+        href: https://auth.gateway.intranet.vflorio.com
+        siteMonitor: http://192.168.1.190:6080
+        description: "SSO / forward auth │ 🏠 auth.gateway.intranet.vflorio.com │ 🔌 192.168.1.190:6080"
+
+    - Tailscale:
+        icon: tailscale.png
+        href: https://login.tailscale.com/admin/machines
+        description: "VPN · subnet router 192.168.1.0/24 · split DNS intranet.vflorio.com → .150 │ 🔒 nessuna porta in ingresso"
+
+    - CrowdSec:
+        icon: crowdsec.png
+        description: "IDS + bouncer Traefik + AppSec WAF │ 🔌 192.168.1.190:6060/metrics"
+
+
+- Gateway · supporto:
+    - Authentik Worker:
+        icon: authentik.png
+        description: "Task in background di Authentik"
+    - PostgreSQL:
+        icon: postgres.png
+        description: "DB Authentik │ 🔒 192.168.1.190:5432"
+    - Valkey:
+        icon: redis.png
+        description: "Cache Authentik (db 0) · provider Traefik (db 1) │ 🔒 192.168.1.190:6379"
+    - Portainer Agent:
+        icon: portainer.png
+        description: "Agent per Portainer │ 🔒 192.168.1.190:9001"
+    - Traefik-kop:
+        icon: traefik.png
+        description: "Pubblica i router locali su Valkey"
+
+- Management:
+    - srv-management:
+        icon: mdi-monitor-dashboard
+        ping: 192.168.1.191
+        description: "VM 3200 · 4 vCPU · 4 GB · monitoring, gestione │ 🔒 management.intranet.vflorio.com │ 🔒 192.168.1.191"
+
+    - Homepage:
+        icon: homepage.png
+        href: https://home.management.intranet.vflorio.com
+        server: management
+        container: homepage
+        description: "Questa dashboard │ 🏠 home.management.intranet.vflorio.com │ 🔌 192.168.1.191:3100"
+
+    - Grafana:
+        icon: grafana.png
+        href: https://grafana.management.intranet.vflorio.com
+        server: management
+        container: grafana
+        description: "Dashboard metriche │ 🏠 grafana.management.intranet.vflorio.com │ 🔌 192.168.1.191:3800"
+
+    - Prometheus:
+        icon: prometheus.png
+        href: https://prometheus.management.intranet.vflorio.com
+        server: management
+        container: prometheus
+        description: "Raccolta metriche │ 🏠 prometheus.management.intranet.vflorio.com │ 🔒 solo 127.0.0.1:9090"
+
+    - Portainer:
+        icon: portainer.png
+        href: https://portainer.management.intranet.vflorio.com
+        server: management
+        container: portainer
+        description: "Gestione container (tutti i server) │ 🏠 portainer.management.intranet.vflorio.com │ 🔌 192.168.1.191:9000"
+
+    - Guacamole:
+        icon: guacamole.png
+        href: https://guacamole.management.intranet.vflorio.com
+        server: management
+        container: guacamole
+        description: "Remote desktop gateway │ 🏠 guacamole.management.intranet.vflorio.com │ 🔌 192.168.1.191:9200"
+
+    - Semaphore:
+        icon: mdi-ansible
+        href: https://semaphore.management.intranet.vflorio.com
+        server: management
+        container: semaphore
+        description: "UI per Ansible │ 🏠 semaphore.management.intranet.vflorio.com │ 🔌 192.168.1.191:3001"
+
+
+- Management · supporto:
+    - Guacd:
+        icon: guacamole.png
+        server: management
+        container: guacd
+        description: "Daemon di Guacamole │ 🔒 192.168.1.191:4822"
+    - PostgreSQL:
+        icon: postgres.png
+        server: management
+        container: postgresql
+        description: "DB Semaphore, Guacamole │ 🔒 192.168.1.191:5432"
+    - Traefik-kop:
+        icon: traefik.png
+        server: management
+        container: traefik-kop
+        description: "Pubblica i router locali su Valkey"
+
+- Media:
+    - srv-media:
+        icon: mdi-filmstrip-box-multiple
+        ping: 192.168.1.192
+        description: "VM 3300 · 6 vCPU · 12 GB · streaming, download │ 🔒 media.intranet.vflorio.com │ 🔒 192.168.1.192"
+
+    - Jellyfin:
+        icon: jellyfin.png
+        href: https://jellyfin.media.intranet.vflorio.com
+        siteMonitor: http://192.168.1.192:8096/health
+        description: "Media server │ 🏠 jellyfin.media.intranet.vflorio.com │ 🔌 192.168.1.192:8096"
+
+    - Emby:
+        icon: emby.png
+        href: https://emby.media.intranet.vflorio.com
+        siteMonitor: http://192.168.1.192:8097
+        description: "Media server │ 🏠 emby.media.intranet.vflorio.com │ 🔌 192.168.1.192:8097"
+
+    - Jellyseerr:
+        icon: jellyseerr.png
+        href: https://jellyseerr.media.intranet.vflorio.com
+        siteMonitor: http://192.168.1.192:5055
+        description: "Richieste film & serie │ 🏠 jellyseerr.media.intranet.vflorio.com │ 🔌 192.168.1.192:5055"
+
+    - Sonarr:
+        icon: sonarr.png
+        href: https://sonarr.media.intranet.vflorio.com
+        siteMonitor: http://192.168.1.192:8989
+        description: "Serie TV │ 🏠 sonarr.media.intranet.vflorio.com │ 🔌 192.168.1.192:8989"
+
+    - Radarr:
+        icon: radarr.png
+        href: https://radarr.media.intranet.vflorio.com
+        siteMonitor: http://192.168.1.192:7878
+        description: "Film │ 🏠 radarr.media.intranet.vflorio.com │ 🔌 192.168.1.192:7878"
+
+    - Lidarr:
+        icon: lidarr.png
+        href: https://lidarr.media.intranet.vflorio.com
+        siteMonitor: http://192.168.1.192:8686
+        description: "Musica │ 🏠 lidarr.media.intranet.vflorio.com │ 🔌 192.168.1.192:8686"
+
+    - Bazarr:
+        icon: bazarr.png
+        href: https://bazarr.media.intranet.vflorio.com
+        siteMonitor: http://192.168.1.192:6767
+        description: "Sottotitoli │ 🏠 bazarr.media.intranet.vflorio.com │ 🔌 192.168.1.192:6767"
+
+    - Prowlarr:
+        icon: prowlarr.png
+        href: https://prowlarr.media.intranet.vflorio.com
+        siteMonitor: http://192.168.1.192:9696
+        description: "Indexer │ 🏠 prowlarr.media.intranet.vflorio.com │ 🔌 192.168.1.192:9696"
+
+    - qBittorrent:
+        icon: qbittorrent.png
+        href: https://qbittorrent.media.intranet.vflorio.com
+        siteMonitor: http://192.168.1.192:8200
+        description: "Client torrent │ 🏠 qbittorrent.media.intranet.vflorio.com │ 🔌 192.168.1.192:8200"
+
+    - SABnzbd:
+        icon: sabnzbd.png
+        href: https://sabnzbd.media.intranet.vflorio.com
+        siteMonitor: http://192.168.1.192:8100
+        description: "Client Usenet │ 🏠 sabnzbd.media.intranet.vflorio.com │ 🔌 192.168.1.192:8100"
+
+    - Tdarr:
+        icon: tdarr.png
+        href: https://tdarr.media.intranet.vflorio.com
+        siteMonitor: http://192.168.1.192:8265
+        description: "Transcoding │ 🏠 tdarr.media.intranet.vflorio.com │ 🔌 192.168.1.192:8265 │ 🔒 server 192.168.1.192:8266"
+
+    - FlareSolverr:
+        icon: flaresolverr.png
+        href: https://flaresolverr.media.intranet.vflorio.com
+        siteMonitor: http://192.168.1.192:8191
+        description: "Bypass Cloudflare per Prowlarr │ 🏠 flaresolverr.media.intranet.vflorio.com │ 🔌 192.168.1.192:8191"
+
+
+- Media · supporto:
+    - Unpackerr:
+        icon: unpackerr.png
+        description: "Estrazione archivi per *arr │ 🔌 192.168.1.192:5656/metrics"
+    - Tdarr Node:
+        icon: tdarr.png
+        description: "Worker di transcoding"
+    - Portainer Agent:
+        icon: portainer.png
+        description: "Agent per Portainer │ 🔒 192.168.1.192:9001"
+    - Traefik-kop:
+        icon: traefik.png
+        description: "Pubblica i router locali su Valkey"
+
+- Dev:
+    - srv-dev:
+        icon: mdi-code-braces-box
+        ping: 192.168.1.193
+        description: "VM 3400 · 8 vCPU · 16 GB · sviluppo, registry │ 🔒 dev.intranet.vflorio.com │ 🔒 192.168.1.193"
+
+    - Coder:
+        icon: coder.png
+        href: https://coder.dev.intranet.vflorio.com
+        siteMonitor: http://192.168.1.193:7080
+        description: "Ambienti di sviluppo │ 🏠 coder.dev.intranet.vflorio.com │ 🔌 192.168.1.193:7080"
+
+    - Gitea:
+        icon: gitea.png
+        href: https://git.dev.intranet.vflorio.com
+        siteMonitor: http://192.168.1.193:3000
+        description: "Git server │ 🏠 git.dev.intranet.vflorio.com │ 🔌 192.168.1.193:3000 │ 🔒 ssh 192.168.1.193:2222"
+
+    - Container Registry:
+        icon: docker.png
+        href: https://container-registry.dev.intranet.vflorio.com/v2/_catalog
+        siteMonitor: http://192.168.1.193:5000/v2/
+        description: "Docker registry │ 🏠 container-registry.dev.intranet.vflorio.com │ 🔌 192.168.1.193:5000"
+
+    - Verdaccio:
+        icon: verdaccio.png
+        href: https://npm.dev.intranet.vflorio.com
+        siteMonitor: http://192.168.1.193:4873
+        description: "Registry npm │ 🏠 npm.dev.intranet.vflorio.com │ 🔌 192.168.1.193:4873"
+
+    - Excalidraw:
+        icon: excalidraw.png
+        href: https://excalidraw.dev.intranet.vflorio.com
+        siteMonitor: http://192.168.1.193:8043
+        description: "Sketch veloci │ 🏠 excalidraw.dev.intranet.vflorio.com │ 🔌 192.168.1.193:8043"
+
+    - Draw.io:
+        icon: draw-io.png
+        href: https://drawio.dev.intranet.vflorio.com
+        siteMonitor: http://192.168.1.193:8084
+        description: "Diagrammi │ 🏠 drawio.dev.intranet.vflorio.com │ 🔌 192.168.1.193:8084"
+
+
+- Dev · supporto:
+    - PostgreSQL:
+        icon: postgres.png
+        description: "DB Coder, Gitea (solo rete docker)"
+    - Portainer Agent:
+        icon: portainer.png
+        description: "Agent per Portainer │ 🔒 192.168.1.193:9001"
+    - Traefik-kop:
+        icon: traefik.png
+        description: "Pubblica i router locali su Valkey"
+
+- Cloud:
+    - srv-cloud:
+        icon: mdi-cloud-outline
+        ping: 192.168.1.194
+        description: "VM 3500 · 4 vCPU · 8 GB · file, documenti, foto │ 🔒 cloud.intranet.vflorio.com │ 🔒 192.168.1.194"
+
+    - Nextcloud:
+        icon: nextcloud.png
+        href: https://nextcloud.cloud.intranet.vflorio.com
+        siteMonitor: http://192.168.1.194:8080/status.php  # needs 192.168.1.194 in Nextcloud trusted_domains, otherwise 400
+        description: "Cloud storage │ 🏠 nextcloud.cloud.intranet.vflorio.com │ 🔌 192.168.1.194:8080"
+
+    - OnlyOffice:
+        icon: onlyoffice.png
+        href: https://onlyoffice.cloud.intranet.vflorio.com
+        siteMonitor: http://192.168.1.194:8081/healthcheck
+        description: "Document server │ 🏠 onlyoffice.cloud.intranet.vflorio.com │ 🔌 192.168.1.194:8081"
+
+    - Immich:
+        icon: immich.png
+        href: https://immich.cloud.intranet.vflorio.com
+        siteMonitor: http://192.168.1.194:2283/api/server/ping
+        description: "Foto & video │ 🏠 immich.cloud.intranet.vflorio.com │ 🔌 192.168.1.194:2283"
+
+
+- Cloud · supporto:
+    - PostgreSQL Nextcloud:
+        icon: postgres.png
+        description: "DB Nextcloud │ 🔒 192.168.1.194:5432"
+    - PostgreSQL Immich:
+        icon: postgres.png
+        description: "DB Immich, vectorchord (solo rete docker)"
+    - Valkey:
+        icon: redis.png
+        description: "Cache Nextcloud / Immich │ 🔒 192.168.1.194:6379"
+    - Portainer Agent:
+        icon: portainer.png
+        description: "Agent per Portainer │ 🔒 192.168.1.194:9001"
+    - Traefik-kop:
+        icon: traefik.png
+        description: "Pubblica i router locali su Valkey"
+
+###############################################################################
+# RETE
+###############################################################################
+
+- Rete:
+    - Internet:
+        icon: mdi-earth
+        description: "Nessun servizio esposto: accesso remoto solo via Tailscale │ 🔒 nessun port forward, nessun record pubblico"
+    - Iliadbox:
+        icon: mdi-router-wireless
+        href: http://192.168.1.254
+        ping: 192.168.1.254
+        description: "Router / default gateway │ 🔌 192.168.1.254 │ 🔒 iliadbox.intranet.vflorio.com"
+    - LAN:
+        icon: mdi-lan
+        description: "192.168.1.0/24 · gw .254 · DNS .150 │ 🔒 dominio intranet.vflorio.com"
+    - .1 – .32:
+        icon: mdi-devices
+        description: "Dispositivi fisici"
+    - .33 – .40:
+        icon: mdi-usb-flash-drive-outline
+        description: "Mini PC ActivaStick"
+    - .150 – .152:
+        icon: mdi-server-network
+        description: "Infrastruttura: DNS, NAS, firewall"
+    - .190 – .194:
+        icon: mdi-server
+        description: "Server applicativi (VM Docker)"
+    - .254:
+        icon: mdi-router
+        description: "Gateway Iliadbox"
+
+- DNS & routing:
+    - Bind9:
+        icon: mdi-dns
+        ping: 192.168.1.150
+        description: "Autoritativo intranet.vflorio.com · aggiornato via Terraform (TSIG) │ 🔒 ns.intranet.vflorio.com │ 🔒 192.168.1.150:53"
+    - Record server:
+        icon: mdi-format-list-bulleted
+        description: "<server>.intranet.vflorio.com → IP della VM │ 🔒 gateway .190 · management .191 · media .192 · dev .193 · cloud .194"
+    - Record app:
+        icon: mdi-asterisk
+        description: "*.<server>.intranet.vflorio.com → 192.168.1.190 │ 🔒 tutte le app passano da Traefik"
+    - Cloudflare:
+        icon: cloudflare.png
+        href: https://dash.cloudflare.com
+        description: "Solo DNS-01 per Let's Encrypt │ 🔒 nessun record app (vedi dns/cloudflare/dns.tf)"
+    - Routing:
+        icon: mdi-transit-connection-variant
+        description: "Traefik@gateway legge i router da Valkey (db 1), traefik-kop li pubblica da ogni server │ 🔒 → <ip server>:<porta app>"
+    - Accesso & TLS:
+        icon: mdi-certificate-outline
+        description: "Let's Encrypt DNS-01 (Cloudflare): *.<server>.intranet · entrypoint solo LAN + tailnet, CrowdSec e Authentik su ogni router"
+
+- Hypervisor & VM:
+    - silicon:
+        icon: proxmox.png
+        href: https://192.168.1.1:8006
+        ping: 192.168.1.1
+        description: "Proxmox VE · nodo homelab · NVMe 1 TB │ 🔌 https://192.168.1.1:8006 │ 🔒 server / silicon.intranet.vflorio.com"
+    - dns:
+        icon: mdi-dns
+        ping: 192.168.1.150
+        description: "VM 1010 · 2 vCPU · 2 GB · Bind9 │ 🔒 192.168.1.150"
+    - nas:
+        icon: openmediavault.png
+        href: http://192.168.1.151
+        ping: 192.168.1.151
+        description: "VM 1020 · OpenMediaVault │ 🔌 192.168.1.151 │ 🔒 nas.intranet.vflorio.com"
+    - firewall:
+        icon: opnsense.png
+        href: https://192.168.1.152
+        ping: 192.168.1.152
+        description: "VM 1030 · OPNsense │ 🔌 https://192.168.1.152 │ 🔒 firewall.intranet.vflorio.com"
+    - srv-gateway:
+        icon: mdi-router-network
+        ping: 192.168.1.190
+        description: "VM 3100 · 4 vCPU · 4 GB · 24 GB │ 🔒 192.168.1.190"
+    - srv-management:
+        icon: mdi-monitor-dashboard
+        ping: 192.168.1.191
+        description: "VM 3200 · 4 vCPU · 4 GB · 24 GB │ 🔒 192.168.1.191"
+    - srv-media:
+        icon: mdi-filmstrip-box-multiple
+        ping: 192.168.1.192
+        description: "VM 3300 · 6 vCPU · 12 GB · 72 GB │ 🔒 192.168.1.192"
+    - srv-dev:
+        icon: mdi-code-braces-box
+        ping: 192.168.1.193
+        description: "VM 3400 · 8 vCPU · 16 GB · 24 GB │ 🔒 192.168.1.193"
+    - srv-cloud:
+        icon: mdi-cloud-outline
+        ping: 192.168.1.194
+        description: "VM 3500 · 4 vCPU · 8 GB · 24 GB │ 🔒 192.168.1.194"
+
+- Storage:
+    - ssd-0:
+        icon: mdi-harddisk
+        description: "SSD · dati app, foto, relax │ 🔒 nas:/ssd-0 → /mnt/nfs/ssd-0"
+    - media-0:
+        icon: mdi-harddisk
+        description: "HDD SMR (JBOD) · libreria media │ 🔒 nas:/media-0 → /mnt/nfs/media-0"
+    - media-1:
+        icon: mdi-harddisk
+        description: "HDD SMR (JBOD) · libreria media │ 🔒 nas:/media-1 → /mnt/nfs/media-1"
+    - media-2:
+        icon: mdi-harddisk
+        description: "HDD SMR (JBOD) · libreria media │ 🔒 nas:/media-2 → /mnt/nfs/media-2"
+
+- Dispositivi:
+    - carbon:
+        icon: mdi-desktop-tower-monitor
+        ping: 192.168.1.2
+        description: "Workstation │ 🔒 192.168.1.2 │ 🔒 workstation / carbon"
+    - nitrogen:
+        icon: mdi-apple
+        ping: 192.168.1.3
+        description: "Mac Mini │ 🔒 192.168.1.3 │ 🔒 macmini / nitrogen"
+    - boron:
+        icon: mdi-tablet-android
+        ping: 192.168.1.4
+        description: "Tablet Android │ 🔒 192.168.1.4 │ 🔒 tablet-android / boron"
+    - phosphorus:
+        icon: mdi-cellphone
+        ping: 192.168.1.5
+        description: "iPhone │ 🔒 192.168.1.5 │ 🔒 smartphone-ios / phosphorus"
+    - sulfur:
+        icon: mdi-television
+        ping: 192.168.1.6
+        description: "Smart TV Hisense │ 🔒 192.168.1.6 │ 🔒 tv-hisense / sulfur"
+    - chlorine:
+        icon: mdi-television-classic
+        ping: 192.168.1.7
+        description: "Smart TV Android │ 🔒 192.168.1.7 │ 🔒 tv-android / chlorine"
+    - argon:
+        icon: mdi-laptop
+        ping: 192.168.1.8
+        description: "Laptop Discovery │ 🔒 192.168.1.8 │ 🔒 laptop-discovery / argon"
+    - neon:
+        icon: mdi-laptop
+        ping: 192.168.1.9
+        description: "Laptop Kineton │ 🔒 192.168.1.9 │ 🔒 laptop-kineton / neon"
+
+- ActivaStick:
+    - activastick-0:
+        icon: mdi-usb-flash-drive-outline
+        ping: 192.168.1.33
+        description: "Mini PC #0 │ 🔒 192.168.1.33 │ 🔒 *.activastick-0"
+    - activastick-1:
+        icon: mdi-usb-flash-drive-outline
+        ping: 192.168.1.34
+        description: "Mini PC #1 │ 🔒 192.168.1.34 │ 🔒 *.activastick-1"
+    - activastick-2:
+        icon: mdi-usb-flash-drive-outline
+        ping: 192.168.1.35
+        description: "Mini PC #2 │ 🔒 192.168.1.35 │ 🔒 *.activastick-2"
+    - activastick-3:
+        icon: mdi-usb-flash-drive-outline
+        ping: 192.168.1.36
+        description: "Mini PC #3 │ 🔒 192.168.1.36 │ 🔒 *.activastick-3"
+    - activastick-4:
+        icon: mdi-usb-flash-drive-outline
+        ping: 192.168.1.37
+        description: "Mini PC #4 │ 🔒 192.168.1.37 │ 🔒 *.activastick-4"
+    - activastick-5:
+        icon: mdi-usb-flash-drive-outline
+        ping: 192.168.1.38
+        description: "Mini PC #5 │ 🔒 192.168.1.38 │ 🔒 *.activastick-5"
+    - activastick-6:
+        icon: mdi-usb-flash-drive-outline
+        ping: 192.168.1.39
+        description: "Mini PC #6 │ 🔒 192.168.1.39 │ 🔒 *.activastick-6"
+    - activastick-7:
+        icon: mdi-usb-flash-drive-outline
+        ping: 192.168.1.40
+        description: "Mini PC #7 │ 🔒 192.168.1.40 │ 🔒 *.activastick-7"

@@ -1,0 +1,9 @@
+# Never raise alerts for tailnet clients (private LAN ranges are already covered by
+# crowdsecurity/whitelists)
+name: homelab/tailnet-whitelist
+description: "Whitelist Tailscale CGNAT and ULA ranges"
+whitelist:
+  reason: "tailnet"
+  cidr:
+    - "100.64.0.0/10"
+    - "fd7a:115c:a1e0::/48"

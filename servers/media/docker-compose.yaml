@@ -1,0 +1,536 @@
+###########################################################################
+# HomeLab Media Server
+# Download, Streaming, Automazione Media
+# IP: 192.168.1.192 (media.intranet.vflorio.com)
+###########################################################################
+
+networks:
+  media:
+    name: media
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: ${DOCKER_SUBNET:?err}
+          gateway: ${DOCKER_GATEWAY:?err}
+
+services:
+  ###########################################################################
+  # Jellyfin - Media Streaming Server
+  ###########################################################################
+  jellyfin:
+    image: lscr.io/linuxserver/jellyfin:10.10.7ubu2404-ls78
+    container_name: jellyfin
+    restart: unless-stopped
+    volumes:
+      - ${PATH_MEDIA:?err}/media-0:/mnt/media-0/
+      - ${PATH_MEDIA:?err}/media-1:/mnt/media-1/
+      - ${PATH_MEDIA:?err}/media-2:/mnt/media-2/
+      - ${PATH_DATA:?err}/jellyfin:/config
+      #- ${PATH_MEDIA:?err}:/mnt/media/ # FIXME non vengono risolti i link simbolici
+    environment:
+#      - PUID=${PUID:?err}
+#      - PGID=${PGID:?err}
+#      - UMASK=${UMASK:?err}
+      - TZ=${TIMEZONE:?err}
+    networks:
+      - media
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_JELLYFIN:?err}:8096
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.jellyfin.service=jellyfin
+      - traefik.http.routers.jellyfin.rule=Host(`jellyfin.${INTRANET_DOMAIN:?err}`)
+      - traefik.http.routers.jellyfin.entrypoints=websecure
+      - traefik.http.routers.jellyfin.middlewares=authentik-forwardauth@file
+      - traefik.http.services.jellyfin.loadbalancer.server.scheme=http
+      - traefik.http.services.jellyfin.loadbalancer.server.port=${PORT_JELLYFIN:?err}
+
+  ###########################################################################
+  # Emby - Media Streaming Server
+  ###########################################################################
+  emby:
+    image: emby/embyserver:4.9.1.80
+    container_name: emby
+    restart: unless-stopped
+    volumes:
+      - ${PATH_MEDIA:?err}/ssd-0:/mnt/media/
+      - ${PATH_DATA:?err}/emby:/config
+    environment:
+      - TZ=${TIMEZONE:?err}
+    networks:
+      - media
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_EMBY:?err}:8096
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.emby.service=emby
+      - traefik.http.routers.emby.rule=Host(`emby.${INTRANET_DOMAIN:?err}`)
+      - traefik.http.routers.emby.entrypoints=websecure
+      - traefik.http.routers.emby.middlewares=authentik-forwardauth@file
+      - traefik.http.services.emby.loadbalancer.server.scheme=http
+      - traefik.http.services.emby.loadbalancer.server.port=${PORT_EMBY:?err}
+
+  ###########################################################################
+  # Jellyseerr - Media Request Management
+  ###########################################################################
+  jellyseerr:
+    image: fallenbagel/jellyseerr:2.7.3
+    container_name: jellyseerr
+    restart: unless-stopped
+    networks:
+      - media
+    volumes:
+      - ${PATH_MEDIA:?err}:/mnt/media/
+      - ${PATH_DATA:?err}/jellyseerr:/app/config
+    environment:
+#      - PUID=${PUID:?err}
+#      - PGID=${PGID:?err}
+#      - UMASK=${UMASK:?err}
+      - TZ=${TIMEZONE:?err}
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_JELLYSEERR:?err}:5055
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.jellyseerr.service=jellyseerr
+      - traefik.http.routers.jellyseerr.rule=Host(`jellyseerr.${INTRANET_DOMAIN:?err}`)
+      - traefik.http.routers.jellyseerr.entrypoints=websecure
+      - traefik.http.routers.jellyseerr.middlewares=authentik-forwardauth@file
+      - traefik.http.services.jellyseerr.loadbalancer.server.scheme=http
+      - traefik.http.services.jellyseerr.loadbalancer.server.port=${PORT_JELLYSEERR:?err}
+
+  ###########################################################################
+  # qBittorrent - Torrent Client
+  ###########################################################################
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:5.1.2-r2-ls417
+    container_name: qbittorrent
+    restart: unless-stopped
+    volumes:
+      - ${PATH_MEDIA:?err}:/media
+      - ${PATH_DATA:?err}/qbittorrent:/config
+    environment:
+#      - PUID=${PUID:?err}
+#      - PGID=${PGID:?err}
+#      - UMASK=${UMASK:?err}
+      - TZ=${TIMEZONE:?err}
+      - WEBUI_PORT=${PORT_QBITTORRENT:?err}
+      - DOCKER_MODS=ghcr.io/themepark-dev/theme.park:qbittorrent
+      - TP_THEME=${TP_THEME:?err}
+    networks:
+      - media
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_QBITTORRENT:?err}:8200
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.qbittorrent.service=qbittorrent
+      - traefik.http.routers.qbittorrent.rule=Host(`qbittorrent.${INTRANET_DOMAIN:?err}`)
+      - traefik.http.routers.qbittorrent.entrypoints=websecure
+      - traefik.http.routers.qbittorrent.middlewares=authentik-forwardauth@file
+      - traefik.http.services.qbittorrent.loadbalancer.server.scheme=http
+      - traefik.http.services.qbittorrent.loadbalancer.server.port=${PORT_QBITTORRENT:?err}
+
+  ###########################################################################
+  # SABnzbd - Usenet Client
+  ###########################################################################
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd:4.5.3-ls231
+    container_name: sabnzbd
+    restart: unless-stopped
+    volumes:
+      - ${PATH_DATA:?err}/sabnzbd:/config
+      - ${PATH_MEDIA:?err}:/media
+    environment:
+#      - PUID=${PUID:?err}
+#      - PGID=${PGID:?err}
+      - TZ=${TIMEZONE:?err}
+      - DOCKER_MODS=ghcr.io/themepark-dev/theme.park:sabnzbd
+      - TP_THEME=${TP_THEME:?err}
+    networks:
+      - media
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_SABNZBD:?err}:8080
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.sabnzbd.service=sabnzbd
+      - traefik.http.routers.sabnzbd.rule=Host(`sabnzbd.${INTRANET_DOMAIN:?err}`)
+      - traefik.http.routers.sabnzbd.entrypoints=websecure
+      - traefik.http.routers.sabnzbd.middlewares=authentik-forwardauth@file
+      - traefik.http.services.sabnzbd.loadbalancer.server.scheme=http
+      - traefik.http.services.sabnzbd.loadbalancer.server.port=${PORT_SABNZBD:?err}
+
+  ###########################################################################
+  # Prowlarr - Indexer Management
+  ###########################################################################
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:develop-2.1.2.5186-ls241
+    container_name: prowlarr
+    restart: unless-stopped
+    volumes:
+      - ${PATH_DATA:?err}/prowlarr:/config
+    environment:
+#      - PUID=${PUID:?err}
+#      - PGID=${PGID:?err}
+      - TZ=${TIMEZONE:?err}
+      - DOCKER_MODS=ghcr.io/themepark-dev/theme.park:prowlarr
+      - TP_THEME=${TP_THEME:?err}
+    networks:
+      - media
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_PROWLARR:?err}:9696
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.prowlarr.service=prowlarr
+      - traefik.http.routers.prowlarr.rule=Host(`prowlarr.${INTRANET_DOMAIN:?err}`)
+      - traefik.http.routers.prowlarr.entrypoints=websecure
+      - traefik.http.routers.prowlarr.middlewares=authentik-forwardauth@file
+      - traefik.http.services.prowlarr.loadbalancer.server.scheme=http
+      - traefik.http.services.prowlarr.loadbalancer.server.port=${PORT_PROWLARR:?err}
+
+  ###########################################################################
+  # Sonarr - TV Shows Management
+  ###########################################################################
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:4.0.15.2941-ls293
+    container_name: sonarr
+    restart: unless-stopped
+    volumes:
+      - ${PATH_DATA:?err}/sonarr:/config
+      - ${PATH_MEDIA:?err}:/media
+    environment:
+#      - PUID=${PUID:?err}
+#      - PGID=${PGID:?err}
+      - TZ=${TIMEZONE:?err}
+      - DOCKER_MODS=ghcr.io/themepark-dev/theme.park:sonarr
+      - TP_THEME=${TP_THEME:?err}
+    networks:
+      - media
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_SONARR:?err}:8989
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.sonarr.service=sonarr
+      - traefik.http.routers.sonarr.rule=Host(`sonarr.${INTRANET_DOMAIN:?err}`)
+      - traefik.http.routers.sonarr.entrypoints=websecure
+      - traefik.http.routers.sonarr.middlewares=authentik-forwardauth@file
+      - traefik.http.services.sonarr.loadbalancer.server.scheme=http
+      - traefik.http.services.sonarr.loadbalancer.server.port=${PORT_SONARR:?err}
+
+  ###########################################################################
+  # Radarr - Movies Management
+  ###########################################################################
+  radarr:
+    image: lscr.io/linuxserver/radarr:5.27.5.10198-ls283
+    container_name: radarr
+    restart: unless-stopped
+    volumes:
+      - ${PATH_DATA:?err}/radarr:/config
+      - ${PATH_MEDIA:?err}:/media
+    environment:
+#      - PUID=${PUID:?err}
+#      - PGID=${PGID:?err}
+      - TZ=${TIMEZONE:?err}
+      - DOCKER_MODS=ghcr.io/themepark-dev/theme.park:radarr
+      - TP_THEME=${TP_THEME:?err}
+    networks:
+      - media
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_RADARR:?err}:7878
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.radarr.service=radarr
+      - traefik.http.routers.radarr.rule=Host(`radarr.${INTRANET_DOMAIN:?err}`)
+      - traefik.http.routers.radarr.entrypoints=websecure
+      - traefik.http.routers.radarr.middlewares=authentik-forwardauth@file
+      - traefik.http.services.radarr.loadbalancer.server.scheme=http
+      - traefik.http.services.radarr.loadbalancer.server.port=${PORT_RADARR:?err}
+
+  ###########################################################################
+  # Lidarr - Music Management
+  ###########################################################################
+  lidarr:
+    image: lscr.io/linuxserver/lidarr:2.13.3.4711-ls3
+    container_name: lidarr
+    restart: unless-stopped
+    volumes:
+      - ${PATH_DATA:?err}/lidarr:/config
+      - ${PATH_MEDIA:?err}:/media
+    environment:
+#      - PUID=${PUID:?err}
+#      - PGID=${PGID:?err}
+      - TZ=${TIMEZONE:?err}
+      - DOCKER_MODS=ghcr.io/themepark-dev/theme.park:lidarr
+      - TP_THEME=${TP_THEME:?err}
+    networks:
+      - media
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_LIDARR:?err}:8686
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.lidarr.service=lidarr
+      - traefik.http.routers.lidarr.rule=Host(`lidarr.${INTRANET_DOMAIN:?err}`)
+      - traefik.http.routers.lidarr.entrypoints=websecure
+      - traefik.http.routers.lidarr.middlewares=authentik-forwardauth@file
+      - traefik.http.services.lidarr.loadbalancer.server.scheme=http
+      - traefik.http.services.lidarr.loadbalancer.server.port=${PORT_LIDARR:?err}
+
+  ###########################################################################
+  # Bazarr - Subtitles Management
+  ###########################################################################
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:v1.5.3-ls319
+    container_name: bazarr
+    restart: unless-stopped
+    volumes:
+      - ${PATH_DATA:?err}/bazarr:/config
+      - ${PATH_MEDIA:?err}:/media
+    environment:
+#      - PUID=${PUID:?err}
+#      - PGID=${PGID:?err}
+      - TZ=${TIMEZONE:?err}
+      - DOCKER_MODS=ghcr.io/themepark-dev/theme.park:bazarr
+      - TP_THEME=${TP_THEME:?err}
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_BAZARR:?err}:6767
+    networks:
+      - media
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.bazarr.service=bazarr
+      - traefik.http.routers.bazarr.rule=Host(`bazarr.${INTRANET_DOMAIN:?err}`)
+      - traefik.http.routers.bazarr.entrypoints=websecure
+      - traefik.http.routers.bazarr.middlewares=authentik-forwardauth@file
+      - traefik.http.services.bazarr.loadbalancer.server.scheme=http
+      - traefik.http.services.bazarr.loadbalancer.server.port=${PORT_BAZARR:?err}
+
+  ###########################################################################
+  # Flaresolverr - Cloudflare Bypass
+  ###########################################################################
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:v3.4.1
+    container_name: flaresolverr
+    restart: unless-stopped
+    environment:
+      - LOG_LEVEL=info
+      - LOG_HTML=false
+      - CAPTCHA_SOLVER=none
+      - TZ=${TIMEZONE:?err}
+    networks:
+      - media
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_FLARESOLVERR:?err}:8191
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.flaresolverr.service=flaresolverr
+      - traefik.http.routers.flaresolverr.rule=Host(`flaresolverr.${INTRANET_DOMAIN:?err}`)
+      - traefik.http.routers.flaresolverr.entrypoints=websecure
+      - traefik.http.routers.flaresolverr.middlewares=authentik-forwardauth@file
+      - traefik.http.services.flaresolverr.loadbalancer.server.scheme=http
+      - traefik.http.services.flaresolverr.loadbalancer.server.port=${PORT_FLARESOLVERR:?err}
+
+  ###########################################################################
+  # Unpackerr - Extraction Service
+  ###########################################################################
+  unpackerr:
+    image: golift/unpackerr:0.14.5
+    container_name: unpackerr
+    restart: unless-stopped
+#    user: ${PUID:?err}:${PGID:?err}
+    volumes:
+      - ${PATH_DATA:?err}/unpackerr:/config
+      - ${PATH_DATA:?err}/unpackerr/logs:/var/log
+      - ${PATH_MEDIA:?err}:/media
+    networks:
+      - media
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_UNPACKERR_METRICS:?err}:5656
+    environment:
+#      - UMASK=${UMASK:?err}
+      - TZ=${TIMEZONE:?err}
+      # Remove all lines that begin with UN_CMDHOOK, UN_WEBHOOK, UN_FOLDER, UN_WEBSERVER, and other apps you do not use.
+      ## Global Settings
+      - UN_DEBUG=false
+      - UN_QUIET=false
+      - UN_ERROR_STDERR=false
+      - UN_ACTIVITY=false
+      - UN_LOG_QUEUES=1m
+      - UN_LOG_FILE=/var/log/unpackerr.log
+      - UN_LOG_FILES=10
+      - UN_LOG_FILE_MB=10
+      - UN_LOG_FILE_MODE=0644
+      - UN_INTERVAL=2m
+      - UN_START_DELAY=1m
+      - UN_RETRY_DELAY=5m
+      - UN_MAX_RETRIES=3
+      - UN_PARALLEL=1
+      - UN_FILE_MODE=0644
+      - UN_DIR_MODE=2755
+      ## Web Server
+      - UN_WEBSERVER_METRICS=true
+      - UN_WEBSERVER_LISTEN_ADDR=0.0.0.0:5656
+      - UN_WEBSERVER_LOG_FILE=/var/log/server.log
+      - UN_WEBSERVER_LOG_FILES=10
+      - UN_WEBSERVER_LOG_FILE_MB=10
+      - UN_WEBSERVER_SSL_CERT_FILE=
+      - UN_WEBSERVER_SSL_KEY_FILE=
+      - UN_WEBSERVER_URLBASE=/
+      - UN_WEBSERVER_UPSTREAMS=
+      ## Folder Settings
+      - UN_FOLDERS_INTERVAL=1s
+      - UN_FOLDERS_BUFFER=20000
+      ## Sonarr Settings
+      ## Sonarr Config - Copy API Key from: http://sonarr:8989/general/settings
+      - UN_SONARR_0_URL=http://sonarr:8989
+      - UN_SONARR_0_API_KEY=0123456789abcdef0123456789abcdef
+      - UN_SONARR_0_PATHS_0=/data/torrents/anime
+      - UN_SONARR_0_PATHS_1=/data/torrents/tv
+      - UN_SONARR_0_PROTOCOLS=torrent
+      - UN_SONARR_0_TIMEOUT=10s
+      - UN_SONARR_0_DELETE_DELAY=5m
+      - UN_SONARR_0_DELETE_ORIG=false
+      - UN_SONARR_0_SYNCTHING=false
+      ## Radarr Settings
+      ## Radarr Config - Copy API Key from: http://radarr:7878/general/settings
+      - UN_RADARR_0_URL=http://radarr:7878
+      - UN_RADARR_0_API_KEY=0123456789abcdef0123456789abcdef
+      - UN_RADARR_0_PATHS_0=/data/torrents/movies
+      - UN_RADARR_0_PROTOCOLS=torrent
+      - UN_RADARR_0_TIMEOUT=10s
+      - UN_RADARR_0_DELETE_DELAY=5m
+      - UN_RADARR_0_DELETE_ORIG=false
+      - UN_RADARR_0_SYNCTHING=false
+      ## Lidarr Settings
+      ## Lidarr Config - Copy API Key from: http://lidarr:8686/general/settings
+      - UN_LIDARR_0_URL=http://lidarr:8686
+      - UN_LIDARR_0_API_KEY=0123456789abcdef0123456789abcdef
+      - UN_LIDARR_0_PATHS_0=/data/torrents/music
+      - UN_LIDARR_0_PROTOCOLS=torrent
+      - UN_LIDARR_0_TIMEOUT=10s
+      - UN_LIDARR_0_DELETE_DELAY=5m
+      - UN_LIDARR_0_DELETE_ORIG=false
+      - UN_LIDARR_0_SYNCTHING=false
+      ## Watch Folders
+      - UN_FOLDER_0_PATH=/data/torrents/complete
+      - UN_FOLDER_0_EXTRACT_PATH=
+      - UN_FOLDER_0_DELETE_AFTER=10m
+      - UN_FOLDER_0_DISABLE_RECURSION=false
+      - UN_FOLDER_0_DELETE_FILES=false
+      - UN_FOLDER_0_DELETE_ORIGINAL=false
+      - UN_FOLDER_0_DISABLE_LOG=false
+      - UN_FOLDER_0_MOVE_BACK=false
+      - UN_FOLDER_0_EXTRACT_ISOS=false
+      ## Web Hooks
+      - UN_WEBHOOK_0_URL=https://notifiarr.com/api/v1/notification/unpackerr/api_key_from_notifiarr_com
+      - UN_WEBHOOK_0_NAME=
+      - UN_WEBHOOK_0_SILENT=false
+      - UN_WEBHOOK_0_EVENTS_0=1
+      - UN_WEBHOOK_0_EVENTS_1=4
+      - UN_WEBHOOK_0_EVENTS_2=6
+      - UN_WEBHOOK_0_NICKNAME=Unpackerr
+      - UN_WEBHOOK_0_CHANNEL=
+      - UN_WEBHOOK_0_EXCLUDE_0=lidarr
+      - UN_WEBHOOK_0_TEMPLATE_PATH=
+      - UN_WEBHOOK_0_TEMPLATE=
+      - UN_WEBHOOK_0_IGNORE_SSL=false
+      - UN_WEBHOOK_0_TIMEOUT=10s
+      - UN_WEBHOOK_0_CONTENT_TYPE=application/json
+      ## Command Hooks
+      - UN_CMDHOOK_0_COMMAND=/data/torrents/unpackerr.sh
+      - UN_CMDHOOK_0_NAME=
+      - UN_CMDHOOK_0_SHELL=false
+      - UN_CMDHOOK_0_SILENT=false
+      - UN_CMDHOOK_0_EVENTS_0=1
+      - UN_CMDHOOK_0_EVENTS_1=4
+      - UN_CMDHOOK_0_EVENTS_2=7
+      - UN_CMDHOOK_0_EXCLUDE_0=lidarr
+      - UN_CMDHOOK_0_TIMEOUT=10s
+
+  ###########################################################################
+  # Tdarr - Video Transcoding
+  ###########################################################################
+  tdarr:
+    image: ghcr.io/haveagitgat/tdarr:3.04.00  # keep in sync with tdarr_node
+    container_name: tdarr
+    restart: unless-stopped
+    volumes:
+      - ${PATH_MEDIA:?err}:/media
+      - ${PATH_DATA:?err}/tdarr/server:/app/server
+      - ${PATH_DATA:?err}/tdarr/configs:/app/configs
+      - ${PATH_DATA:?err}/tdarr/logs:/app/logs
+      - ${PATH_DATA:?err}/tdarr-node:/temp
+    environment:
+#      - PUID=${PUID:?err}
+#      - PGID=${PGID:?err}
+#      - UMASK=${UMASK:?err}
+      - TZ=${TIMEZONE:?err}
+      - serverIP=0.0.0.0
+      - serverPort=${PORT_TDARR:?err}
+      - webUIPort=${PORT_TDARR_WEB:?err}
+      - internalNode=true
+      - nodeID=Tdarr_Server
+    networks:
+      - media
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_TDARR_WEB:?err}:8265
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_TDARR:?err}:8266
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.tdarr.service=tdarr
+      - traefik.http.routers.tdarr.rule=Host(`tdarr.${INTRANET_DOMAIN:?err}`)
+      - traefik.http.routers.tdarr.entrypoints=websecure
+      - traefik.http.routers.tdarr.middlewares=authentik-forwardauth@file
+      - traefik.http.services.tdarr.loadbalancer.server.scheme=http
+      - traefik.http.services.tdarr.loadbalancer.server.port=${PORT_TDARR:?err}
+  tdarr-node:
+    image: ghcr.io/haveagitgat/tdarr_node:3.04.00  # keep in sync with tdarr
+    container_name: tdarr-node
+    restart: unless-stopped
+    volumes:
+      - ${PATH_MEDIA:?err}:/media
+      - ${PATH_DATA:?err}/tdarr/configs:/app/configs
+      - ${PATH_DATA:?err}/tdarr/logs:/app/logs
+      - ${PATH_DATA:?err}/tdarr-node:/temp
+    environment:
+#      - PUID=${PUID:?err}
+#      - PGID=${PGID:?err}
+#      - UMASK=${UMASK:?err}
+      - TZ=${TIMEZONE:?err}
+      - nodeID=Tdarr_Node_1
+      - serverIP=0.0.0.0
+      - serverPort=${PORT_TDARR:?err}
+    networks:
+      - media
+
+
+  ###########################################################################
+  # Portainer - Docker Management
+  ###########################################################################
+  portainer-agent:
+    container_name: portainer-agent
+    image: "portainer/agent:2.33.2@sha256:a454c023f4b79ae308e372e5a4ab0d37961d6d8ad88fe5945544435203ded198"  # must match portainer-ce version on management
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/volumes:/var/lib/docker/volumes
+    restart: unless-stopped
+    ports:
+      - "${LOCAL_DOCKER_IP:?err}:${PORT_PORTAINER_AGENT:?err}:9001"
+    environment:
+      - AGENT_CLUSTER_ADDR="192.168.1.191" 
+    networks:
+      - media
+
+  ###########################################################################
+  # Traefik-KOP - Service Discovery Agent
+  ###########################################################################
+  traefik-kop:
+    image: "ghcr.io/jittering/traefik-kop:0.17"
+    container_name: traefik-kop
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - "REDIS_ADDR=${INTRANET_GATEWAY_IP:?err}:${PORT_VALKEY:?err}"
+      - "REDIS_DB=${VALKEY_TRAEFIK_KOP:?err}"
+      - "BIND_IP=${LOCAL_DOCKER_IP:?err}"
+    networks:
+      - media

@@ -1,0 +1,228 @@
+###########################################################################
+# HomeLab Cloud Server
+# IP: 192.168.1.194 (cloud.intranet.vflorio.com)
+###########################################################################
+
+networks:
+  cloud:
+    name: cloud
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: ${DOCKER_SUBNET:?err}
+          gateway: ${DOCKER_GATEWAY:?err}
+
+# local disk on purpose: Postgres on NFS is unsafe (locking/corruption)
+volumes:
+  nextcloud-postgres-data:
+    driver: local
+  immich-postgres-data:
+    driver: local
+  # the images declare these paths as VOLUME: without a named volume every recreate leaves an orphan copy behind
+  nextcloud-html:
+    driver: local
+  onlyoffice-lib:
+    driver: local
+  onlyoffice-db:
+    driver: local
+
+services:
+  ###########################################################################
+  # Nextcloud - Cloud Storage
+  ###########################################################################
+  nextcloud:
+    image: nextcloud:31.0.9
+    container_name: nextcloud
+    restart: unless-stopped
+    volumes:
+      - nextcloud-html:/var/www/html  # app code, config.php and installed apps
+      - ${PATH_DATA:?err}/nextcloud:/var/www/html/data
+    ports:
+      - "${LOCAL_DOCKER_IP:?err}:${PORT_NEXTCLOUD:?err}:80"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.nextcloud.service=nextcloud
+      - traefik.http.routers.nextcloud.entrypoints=websecure
+      - traefik.http.routers.nextcloud.rule=Host(`nextcloud.${INTRANET_DOMAIN:?err}`)
+      - traefik.http.routers.nextcloud.middlewares=authentik-forwardauth@file
+      - traefik.http.services.nextcloud.loadbalancer.server.scheme=http
+      - traefik.http.services.nextcloud.loadbalancer.server.port=${PORT_NEXTCLOUD:?err}
+    networks:
+      - cloud
+    environment:
+      - POSTGRES_HOST=nextcloud-postgresql:${PORT_POSTGRES:?err}
+      - POSTGRES_DB=${NEXTCLOUD_DATABASE:?err}
+      - POSTGRES_USER=${POSTGRES_USER:?err}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?err}
+      - REDIS_HOST=valkey
+      - NEXTCLOUD_ADMIN_USER=${NEXTCLOUD_ADMIN_USER:?err}
+      - NEXTCLOUD_ADMIN_PASSWORD=${NEXTCLOUD_ADMIN_PASSWORD:?err}
+      - NEXTCLOUD_TRUSTED_DOMAINS=nextcloud.${INTRANET_DOMAIN:?err} localhost 127.0.0.1 nextcloud-postgresql
+      # behind Traefik on the gateway: TLS ends there, so tell nextcloud the public scheme
+      - TRUSTED_PROXIES=${INTRANET_GATEWAY_IP:?err}
+      - OVERWRITEPROTOCOL=https
+
+  nextcloud-postgresql:
+    image: docker.io/library/postgres:18-alpine  # major upgrades only via dump/restore
+    container_name: nextcloud-postgresql
+    restart: unless-stopped
+    networks:
+      - cloud
+    # user: ${PUID:?err}:${PGID:?err}  # FIXME
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_POSTGRES:?err}:5432
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ${NEXTCLOUD_DATABASE} -U ${POSTGRES_USER}"]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 5s
+    volumes:
+      - nextcloud-postgres-data:/var/lib/postgresql  # postgres 18+ keeps data in /var/lib/postgresql/18/docker
+    environment:
+      - TZ=${TIMEZONE:?err}
+      - POSTGRES_DB=${NEXTCLOUD_DATABASE:?err}
+      - POSTGRES_USER=${POSTGRES_USER:?err}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?err}
+
+  ###########################################################################
+  # OnlyOffice - Document Server
+  ###########################################################################
+  onlyoffice:
+    image: onlyoffice/documentserver:10.0.0.1
+    container_name: onlyoffice
+    restart: unless-stopped
+    mem_limit: 3g  # keep a runaway onlyoffice from taking down the whole VM
+    ports:
+      - "${LOCAL_DOCKER_IP:?err}:${PORT_ONLYOFFICE:?err}:80"
+    volumes:
+      - ${PATH_DATA:?err}/onlyoffice/data:/var/www/onlyoffice/Data
+      - ${PATH_DATA:?err}/onlyoffice/logs:/var/log/onlyoffice
+      - onlyoffice-lib:/var/lib/onlyoffice
+      - onlyoffice-db:/var/lib/postgresql  # onlyoffice uses its own internal postgres, not nextcloud's
+    environment:
+      - PLUGINS_ENABLED=false  # the plugins manager grew to 6GB on first start and OOM-killed the VM
+      - JWT_ENABLED=true
+      - JWT_SECRET=${ONLYOFFICE_JWT_SECRET:?err}  # same value goes in the Nextcloud ONLYOFFICE app settings
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.onlyoffice.service=onlyoffice
+      - traefik.http.routers.onlyoffice.entrypoints=websecure
+      - traefik.http.routers.onlyoffice.rule=Host(`onlyoffice.${INTRANET_DOMAIN:?err}`)
+      - traefik.http.routers.onlyoffice.middlewares=authentik-forwardauth@file
+      - traefik.http.services.onlyoffice.loadbalancer.server.scheme=http
+      - traefik.http.services.onlyoffice.loadbalancer.server.port=${PORT_ONLYOFFICE:?err}
+    networks:
+      - cloud
+
+  ###########################################################################
+  # Immich - Photo Management
+  ###########################################################################
+  immich:
+    container_name: immich
+    image: ghcr.io/immich-app/immich-server:v2.0.1  # keep compatible with the immich postgres image below
+    volumes:
+      - ${PATH_DATA}/immich:/data
+      - ${PATH_MEDIA:?err}:/media
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_IMMICH:?err}:2283
+    depends_on:
+      - immich-postgresql
+      - valkey
+    restart: always
+    environment:
+      - DB_HOSTNAME=immich-postgresql
+      - DB_PORT=5432
+      - DB_DATABASE_NAME=${IMMICH_DATABASE}
+      - DB_USERNAME=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - REDIS_HOSTNAME=valkey
+      - REDIS_PORT=6379
+      - IMMICH_MACHINE_LEARNING_ENABLED=false
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.immich.service=immich
+      - traefik.http.routers.immich.entrypoints=websecure
+      - traefik.http.routers.immich.rule=Host(`immich.${INTRANET_DOMAIN:?err}`)
+      - traefik.http.routers.immich.middlewares=authentik-forwardauth@file
+      - traefik.http.services.immich.loadbalancer.server.scheme=http
+      - traefik.http.services.immich.loadbalancer.server.port=${PORT_IMMICH:?err}
+    healthcheck:
+      disable: false
+    networks:
+      - cloud
+
+  immich-postgresql:
+    container_name: immich-postgresql
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:41eacbe83eca995561fe43814fd4891e16e39632806253848efaf04d3c8a8b84
+    environment:
+      - POSTGRES_DB=${IMMICH_DATABASE}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_INITDB_ARGS='--data-checksums'
+    volumes:
+      - immich-postgres-data:/var/lib/postgresql/data
+    restart: always
+    networks:
+      - cloud
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ${IMMICH_DATABASE} -U ${POSTGRES_USER}"]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 5s
+
+  ###########################################################################
+  # Valkey - Redis Cache
+  ###########################################################################
+  valkey:
+    image: valkey/valkey:8.1.4-alpine
+    container_name: valkey
+    command: --save 60 1 --loglevel warning
+    restart: unless-stopped
+    networks:
+      - cloud
+#    user: ${PUID:?err}:${PGID:?err}
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_VALKEY:?err}:6379
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli ping | grep PONG"]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 3s
+
+  ###########################################################################
+  # Portainer - Docker Management
+  ###########################################################################
+  portainer-agent:
+    container_name: portainer-agent
+    image: "portainer/agent:2.33.2@sha256:a454c023f4b79ae308e372e5a4ab0d37961d6d8ad88fe5945544435203ded198"  # must match portainer-ce version on management
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/volumes:/var/lib/docker/volumes
+    restart: unless-stopped
+    ports:
+      - "${LOCAL_DOCKER_IP:?err}:${PORT_PORTAINER_AGENT:?err}:9001"
+    environment:
+      - AGENT_CLUSTER_ADDR="192.168.1.191"
+    networks:
+      - cloud
+
+  ###########################################################################
+  # Traefik-KOP - Service Discovery Agent
+  ###########################################################################
+  traefik-kop:
+    image: "ghcr.io/jittering/traefik-kop:0.18.1"
+    container_name: traefik-kop
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - "REDIS_ADDR=${INTRANET_GATEWAY_IP:?err}:${PORT_VALKEY:?err}"
+      - "REDIS_DB=${VALKEY_TRAEFIK_KOP:?err}"
+      - "BIND_IP=${LOCAL_DOCKER_IP:?err}"
+    networks:
+      - cloud

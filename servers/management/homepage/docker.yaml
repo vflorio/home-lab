@@ -1,0 +1,9 @@
+---
+# Docker hosts for container status/stats
+# https://gethomepage.dev/configs/docker/
+#
+# Only the local socket is mounted (see ../docker-compose.yaml); the other servers
+# expose a Portainer agent, not the Docker API, so their cards use siteMonitor instead
+
+management:
+  socket: /var/run/docker.sock

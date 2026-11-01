@@ -1,0 +1,25 @@
+---
+# Info widgets (top bar)
+# https://gethomepage.dev/widgets/info/
+
+- greeting:
+    text_size: xl
+    text: vflorio · homelab
+
+- resources:
+    label: srv-management
+    cpu: true
+    memory: true
+    disk: /
+    uptime: true
+
+- search:
+    provider: duckduckgo
+    target: _blank
+
+- datetime:
+    text_size: xl
+    locale: it
+    format:
+      dateStyle: medium
+      timeStyle: short

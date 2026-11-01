@@ -1,0 +1,15 @@
+---
+# Traefik access log (JSON), written by Traefik to ${PATH_DATA}/logs/traefik on NFS
+poll_without_inotify: true
+filenames:
+  - /var/log/traefik/access.log
+labels:
+  type: traefik
+---
+# AppSec WAF queried by the Traefik bouncer plugin (crowdsec:7422, docker network only)
+source: appsec
+listen_addr: 0.0.0.0:7422
+appsec_config: crowdsecurity/appsec-default
+name: traefik-appsec
+labels:
+  type: appsec

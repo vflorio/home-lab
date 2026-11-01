@@ -1,0 +1,12 @@
+$TTL 2d
+$ORIGIN intranet.vflorio.com.
+
+@		IN		SOA		ns.intranet.vflorio.com. intranet.vflorio.com. (
+						2003080800 	; serial number
+						12h			; refresh
+						15m			; update retry
+						3w		 	; expiry
+						2h		 	; minimum
+						)
+		IN		NS		ns.intranet.vflorio.com.
+ns		IN		A		192.168.1.150

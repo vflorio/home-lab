@@ -1,0 +1,112 @@
+---
+# Homepage settings
+# https://gethomepage.dev/configs/settings/
+
+title: vflorio · homelab
+description: Server, servizi e mappa di rete dell'homelab
+language: it
+theme: dark
+color: slate
+target: _blank
+headerStyle: clean
+statusStyle: dot
+iconStyle: theme
+useEqualHeights: true
+hideVersion: true
+showStats: false
+
+quicklaunch:
+  searchDescriptions: true
+  hideInternetSearch: true
+  showSearchSuggestions: false
+
+# Tabs follow the order of this block: "Servizi" is the landing tab, "Rete" is reachable at /#rete
+layout:
+  # --- SERVIZI ---------------------------------------------------------------
+  Gateway:
+    tab: Servizi
+    icon: mdi-router-network
+    style: row
+    columns: 4
+  Gateway · supporto:
+    tab: Servizi
+    icon: mdi-cog-outline
+    style: row
+    columns: 5
+    initiallyCollapsed: true
+  Management:
+    tab: Servizi
+    icon: mdi-monitor-dashboard
+    style: row
+    columns: 4
+  Management · supporto:
+    tab: Servizi
+    icon: mdi-cog-outline
+    style: row
+    columns: 5
+    initiallyCollapsed: true
+  Media:
+    tab: Servizi
+    icon: mdi-filmstrip-box-multiple
+    style: row
+    columns: 4
+  Media · supporto:
+    tab: Servizi
+    icon: mdi-cog-outline
+    style: row
+    columns: 5
+    initiallyCollapsed: true
+  Dev:
+    tab: Servizi
+    icon: mdi-code-braces-box
+    style: row
+    columns: 4
+  Dev · supporto:
+    tab: Servizi
+    icon: mdi-cog-outline
+    style: row
+    columns: 5
+    initiallyCollapsed: true
+  Cloud:
+    tab: Servizi
+    icon: mdi-cloud-outline
+    style: row
+    columns: 4
+  Cloud · supporto:
+    tab: Servizi
+    icon: mdi-cog-outline
+    style: row
+    columns: 5
+    initiallyCollapsed: true
+
+  # --- RETE ------------------------------------------------------------------
+  Rete:
+    tab: Rete
+    icon: mdi-lan
+    style: row
+    columns: 3
+  DNS & routing:
+    tab: Rete
+    icon: mdi-dns
+    style: row
+    columns: 3
+  Hypervisor & VM:
+    tab: Rete
+    icon: proxmox.png
+    style: row
+    columns: 4
+  Storage:
+    tab: Rete
+    icon: mdi-nas
+    style: row
+    columns: 4
+  Dispositivi:
+    tab: Rete
+    icon: mdi-devices
+    style: row
+    columns: 4
+  ActivaStick:
+    tab: Rete
+    icon: mdi-usb-flash-drive-outline
+    style: row
+    columns: 4

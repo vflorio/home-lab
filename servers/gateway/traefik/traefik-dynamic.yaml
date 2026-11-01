@@ -1,0 +1,134 @@
+#########################################################################
+#########################################################################
+#
+# Filename: dynamic.yaml        Traefik Dynamic Configuration File
+#
+# Middleware chains:
+#   intranet  applied by the websecure entrypoint to every router (LAN + tailnet only)
+#   public    for a future internet-facing entrypoint / Cloudflare Tunnel (unused for now)
+#
+# Routers only need to add authentik-forwardauth@file when the app has no own login
+#
+#########################################################################
+#########################################################################
+
+tls:
+  stores:
+    default:
+      defaultGeneratedCert:
+        resolver: letsencrypt
+        domain:
+          main: "*.gateway.intranet.vflorio.com"
+  options:
+    default:
+      minVersion: VersionTLS12
+      cipherSuites:
+        - TLS_AES_256_GCM_SHA384
+        - TLS_CHACHA20_POLY1305_SHA256
+        - TLS_AES_128_GCM_SHA256
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
+        - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+        - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+      curvePreferences:
+        - CurveP521
+        - CurveP384
+      sniStrict: true
+
+http:
+  middlewares:
+    intranet:
+      chain:
+        middlewares:
+          - lan-only
+          - traefik-bouncer
+          - security-headers
+
+    public:
+      chain:
+        middlewares:
+          - traefik-bouncer
+          - rate-limit
+          - security-headers
+
+    # Only clients that are physically in the LAN or connected to the tailnet.
+    # Uses the TCP source address (never X-Forwarded-For), so it can't be spoofed
+    lan-only:
+      ipAllowList:
+        sourceRange:
+          - 192.168.1.0/24          # LAN
+          - 100.64.0.0/10           # Tailscale (tailnet IPv4)
+          - fd7a:115c:a1e0::/48     # Tailscale (tailnet IPv6)
+          - 172.28.10.1/32          # hairpin from containers on the gateway (docker bridge gateway)
+
+    rate-limit:
+      rateLimit:
+        average: 50
+        burst: 100
+
+    security-headers:
+      headers:
+        accessControlAllowCredentials: true
+        accessControlAllowHeaders: "*"
+        accessControlAllowMethods:
+          - GET
+          - OPTIONS
+          - PUT
+        accessControlAllowOriginList:
+          - https://*.intranet.vflorio.com
+        accessControlMaxAge: 100
+        addVaryHeader: true
+        browserXssFilter: true
+        stsSeconds: 63072000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        forceSTSHeader: true
+        frameDeny: true
+        customFrameOptionsValue: SAMEORIGIN
+        contentTypeNosniff: true
+#        contentSecurityPolicy: default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'
+        referrerPolicy: strict-origin-when-cross-origin
+        permissionsPolicy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+
+    authentik-forwardauth:
+      forwardAuth:
+        address: http://authentik:9000/outpost.goauthentik.io/auth/traefik
+        trustForwardHeader: true
+        authResponseHeaders:
+          - X-authentik-username
+          - X-authentik-groups
+          - X-authentik-email
+          - X-authentik-name
+          - X-authentik-uid
+          - X-authentik-jwt
+          - X-authentik-meta-jwks
+          - X-authentik-meta-outpost
+          - X-authentik-meta-provider
+          - X-authentik-meta-app
+          - X-authentik-meta-version
+
+    # LAN/tailnet clients are trusted (never banned, no AppSec round-trip); everything else
+    # is checked against local decisions + community blocklist and inspected by the AppSec WAF
+    traefik-bouncer:
+      plugin:
+        crowdsec-bouncer-traefik-plugin:
+          enabled: true
+          crowdsecMode: stream
+          updateIntervalSeconds: 60
+          crowdsecAppsecEnabled: true
+          crowdsecAppsecHost: crowdsec:7422
+          crowdsecAppsecFailureBlock: true
+          crowdsecAppsecUnreachableBlock: true
+          crowdsecLapiKeyFile: /run/secrets/crowdsec_bouncer_key  # CROWDSEC_BOUNCER_KEY in .env
+          crowdsecLapiHost: crowdsec:8080
+          crowdsecLapiScheme: http
+          # Empty until something sits in front of Traefik. With a Cloudflare Tunnel add the
+          # cloudflared container IP here and set forwardedHeadersCustomName: Cf-Connecting-Ip
+          forwardedHeadersTrustedIPs: []
+          clientTrustedIPs:
+            - 192.168.1.0/24
+            - 100.64.0.0/10
+            - fd7a:115c:a1e0::/48
+            - 172.28.10.1/32

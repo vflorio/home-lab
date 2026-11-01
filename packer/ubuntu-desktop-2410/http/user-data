@@ -1,0 +1,47 @@
+#cloud-config
+autoinstall:
+  version: 1
+  locale: en_US
+  refresh-installer:
+      update: false
+  keyboard:
+    layout: us
+  ssh:
+    install-server: true
+    allow-pw: true
+    disable_root: true
+    ssh_quiet_keygen: true
+    allow_public_ssh_keys: true
+  storage:
+    layout:
+      name: direct
+    swap:
+      size: 0
+  user-data:
+    package_upgrade: true
+    timezone: Europe/Rome
+    ssh_pwauth: true
+    users:
+      - name: vflorio
+        groups: [adm, sudo]
+        lock-passwd: false
+        sudo: ALL=(ALL) NOPASSWD:ALL
+        shell: /bin/bash
+        passwd: $6$TBfo6goncg85LmcO$2PvnqP.u.nhzR3NM71TIiIN1PlhCp49JEiAGSRPViNWjkgbtQ6/TILmqrD./UNu7TnptTGDQtunPEtciyXjkY.
+  packages:
+    - qemu-guest-agent
+    - sudo
+    - vim
+    - zip
+    - unzip
+    - nfs-common
+  runcmd:
+    - mkdir -p /mnt/nfs/media-0
+    - mkdir -p /mnt/nfs/media-1
+    - mkdir -p /mnt/nfs/media-2
+    - mkdir -p /mnt/nfs/ssd-0
+    - echo "nas.intranet.vflorio.com:/media-0 /mnt/nfs/media-0 nfs defaults,rw,_netdev 0 0" >> /etc/fstab
+    - echo "nas.intranet.vflorio.com:/media-1 /mnt/nfs/media-1 nfs defaults,rw,_netdev 0 0" >> /etc/fstab
+    - echo "nas.intranet.vflorio.com:/media-2 /mnt/nfs/media-2 nfs defaults,rw,_netdev 0 0" >> /etc/fstab
+    - echo "nas.intranet.vflorio.com:/ssd-0 /mnt/nfs/ssd-0 nfs defaults,rw,_netdev 0 0" >> /etc/fstab
+    - systemctl daemon-reload

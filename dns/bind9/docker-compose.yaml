@@ -1,0 +1,12 @@
+services:
+  bind9:
+    container_name: dns
+    image: ubuntu/bind9:9.18-24.04_beta@sha256:38fc0495351783f1ab2fa63865aa00a2a609dc50dadf59e8ed6235e48cdaba6f
+    environment:
+      - BIND9_USER=root
+      - TZ=Europe/Rome
+    volumes:
+      - ./config/:/etc/bind:rw
+    network_mode: host
+    restart: unless-stopped
+

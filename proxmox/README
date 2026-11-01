@@ -1,0 +1,13 @@
+  Terraform
+
+    Inizializza il progetto Terraform installando i provider e i moduli necessari.
+      terraform init
+    
+    Verifica la correttezza della configurazione.
+      terraform plan
+    
+    Applica le modifiche alla infrastruttura.
+      terraform apply
+    
+    Distrugge la infrastruttura.
+      terraform destroy

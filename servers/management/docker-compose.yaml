@@ -1,0 +1,282 @@
+###########################################################################
+# HomeLab Management Server
+# Monitoring, Management, Database, Remote Access
+# IP: 192.168.1.191 (management.intranet.vflorio.com)
+###########################################################################
+
+networks:
+  management:
+    name: management
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+      - subnet: ${DOCKER_SUBNET:?err}
+        gateway: ${DOCKER_GATEWAY:?err}
+
+volumes:
+  # local disk on purpose: Postgres on NFS is unsafe (locking/corruption)
+  postgresql-data:
+    driver: local
+
+services:
+
+  ###########################################################################
+  # Guacamole / Guacd - Remote Desktop Gateway
+  ###########################################################################
+  guacamole:
+    image: guacamole/guacamole:1.6.0@sha256:9e99fa50b7939c3a296c4b0809fe3e52cfecbf010318b439160295a407910423  # keep in sync with guacd
+    container_name: guacamole
+    restart: unless-stopped
+    #user: ${PUID:?err}:${PGID:?err}
+    depends_on:
+      postgresql:
+        condition: service_healthy
+        restart: true
+    networks:
+      - management
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_GUACAMOLE:?err}:8080
+    environment:
+      - TZ=${TIMEZONE:?err}
+      - WEBAPP_CONTEXT=ROOT
+      - GUACD_HOSTNAME=guacd
+      - POSTGRESQL_HOSTNAME=postgresql
+      - POSTGRESQL_PORT=${PORT_POSTGRES:?err}
+      - POSTGRESQL_DATABASE=${GUACAMOLE_DATABASE:?err}
+      - POSTGRESQL_USER=${POSTGRES_USER:?err}
+      - POSTGRESQL_PASSWORD=${POSTGRES_PASSWORD:?err}
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.guacamole.service=guacamole
+      - traefik.http.routers.guacamole.rule=Host(`guacamole.${INTRANET_DOMAIN:?err}`)  
+      - traefik.http.routers.guacamole.entrypoints=websecure
+      - traefik.http.routers.guacamole.middlewares=authentik-forwardauth@file
+      - traefik.http.services.guacamole.loadbalancer.server.scheme=http
+      - traefik.http.services.guacamole.loadbalancer.server.port=${PORT_GUACAMOLE:?err}
+
+  ###########################################################################
+  # Guacd - Guacamole Daemon
+  ###########################################################################
+  guacd:
+    image: guacamole/guacd:1.6.0@sha256:ed8a1835845add72b358a5aa913da1309604a0222b47bea6f3786afae1289e35  # keep in sync with guacamole
+    container_name: guacd
+    restart: unless-stopped
+    #user: ${PUID:?err}:${PGID:?err}
+    depends_on:
+      postgresql:
+        condition: service_healthy
+        restart: true
+    networks:
+      - management
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_GUACD:?err}:4822
+    environment:
+      - TZ=${TIMEZONE:?err}
+      - POSTGRESQL_HOSTNAME=postgresql
+      - POSTGRESQL_PORT=${PORT_POSTGRES:?err}
+      - POSTGRESQL_DATABASE=${GUACAMOLE_DATABASE:?err}
+      - POSTGRESQL_USER=${POSTGRES_USER:?err}
+      - POSTGRESQL_PASSWORD=${POSTGRES_PASSWORD:?err}
+
+  ###########################################################################
+  # Prometheus - Metrics Collection & Monitoring
+  ###########################################################################
+  prometheus:
+    image: prom/prometheus:v3.6.0
+    container_name: prometheus
+    restart: unless-stopped
+    #user: ${PUID:?err}:${PGID:?err}
+    networks:
+      - management
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_PROMETHEUS:?err}:9090  # traefik-kop routes to LOCAL_DOCKER_IP
+    volumes:
+      - ${PATH_DATA:?err}/prometheus:/prometheus
+    environment:
+      - TZ=${TIMEZONE:?err}
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.prometheus.service=prometheus
+      - traefik.http.routers.prometheus.rule=Host(`prometheus.${INTRANET_DOMAIN:?err}`)
+      - traefik.http.routers.prometheus.entrypoints=websecure
+      - traefik.http.routers.prometheus.middlewares=authentik-forwardauth@file
+      - traefik.http.services.prometheus.loadbalancer.server.scheme=http
+      - traefik.http.services.prometheus.loadbalancer.server.port=${PORT_PROMETHEUS:?err}
+
+  ###########################################################################
+  # Grafana - Visual Monitoring Dashboard
+  ###########################################################################
+  grafana:
+    image: grafana/grafana-enterprise:12.2.0
+    container_name: grafana
+    restart: unless-stopped
+    #user: ${PUID:?err}:${PGID:?err}
+    networks:
+      - management
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_GRAFANA:?err}:3000
+    volumes:
+      - /var/log:/var/dockerhost:ro
+      - ${PATH_DATA:?err}/grafana:/var/lib/grafana
+    environment:
+      - TZ=${TIMEZONE:?err}
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.grafana.service=grafana
+      - traefik.http.routers.grafana.rule=Host(`grafana.${INTRANET_DOMAIN:?err}`)
+      - traefik.http.routers.grafana.entrypoints=websecure
+      - traefik.http.routers.grafana.middlewares=authentik-forwardauth@file
+      - traefik.http.services.grafana.loadbalancer.server.scheme=http 
+      - traefik.http.services.grafana.loadbalancer.server.port=${PORT_GRAFANA:?err}
+
+  ###########################################################################
+  # Portainer - Container Management
+  ###########################################################################
+  portainer:
+    image: portainer/portainer-ce:2.33.2  # keep portainer/agent on all servers in sync
+    container_name: portainer
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${PATH_DATA:?err}/portainer:/data
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_PORTAINER:?err}:9000
+    networks:
+      - management
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.portainer.service=portainer
+      - traefik.http.routers.portainer.rule=Host(`portainer.${INTRANET_DOMAIN:?err}`)
+      - traefik.http.routers.portainer.entrypoints=websecure
+      - traefik.http.routers.portainer.middlewares=authentik-forwardauth@file
+      - traefik.http.services.portainer.loadbalancer.server.scheme=http
+      - traefik.http.services.portainer.loadbalancer.server.port=${PORT_PORTAINER:?err}
+  
+  ###########################################################################
+  # Homepage - Docker Container Dashboard
+  ###########################################################################
+  homepage:
+    image: ghcr.io/gethomepage/homepage:v1.5.0
+    container_name: homepage
+    restart: unless-stopped
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_HOMEPAGE:?err}:3000
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./homepage:/app/config
+    environment:
+      #- UMASK=${UMASK:?err}
+      - TZ=${TIMEZONE:?err}
+      - HOMEPAGE_ALLOWED_HOSTS=home.${INTRANET_DOMAIN:?err},${INTRANET_DOMAIN:?err}:${PORT_HOMEPAGE:?err}
+    networks:
+      - management
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.homepage.service=homepage
+      - traefik.http.routers.homepage.entrypoints=websecure
+      - traefik.http.routers.homepage.rule=Host(`home.${INTRANET_DOMAIN:?err}`)
+      - traefik.http.routers.homepage.middlewares=authentik-forwardauth@file
+      - traefik.http.services.homepage.loadbalancer.server.scheme=http
+      - traefik.http.services.homepage.loadbalancer.server.port=${PORT_HOMEPAGE:?err}
+
+  ###########################################################################
+  # Semaphore - Ansible Web UI / Frontend
+  ###########################################################################
+  semaphore:
+    image: semaphoreui/semaphore:v2.19.17
+    container_name: semaphore
+    restart: unless-stopped
+    #user: ${PUID:?err}:${PGID:?err}
+    depends_on:
+      postgresql:
+        condition: service_healthy
+        restart: true
+    networks:
+      - management
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_SEMAPHORE:?err}:${PORT_SEMAPHORE:?err}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${PORT_SEMAPHORE:?err}/api/ping"]
+      start_period: 30s
+      interval: 30s
+      retries: 5
+      timeout: 10s
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${PATH_DATA:?err}/semaphore/config:/etc/semaphore:rw
+      - ${PATH_DATA:?err}/semaphore/tmp:/tmp/semaphore:rw
+      # - ${PATH_DATA:?err}/ansible:/ansible:ro # FIXME Mount ansible playbooks
+      # - ${PATH_DATA:?err}/ssh:/root/.ssh:ro   # FIXME SSH keys for remote access
+    environment:
+      - TZ=${TIMEZONE:?err}
+      # Database configuration (PostgreSQL)
+      - SEMAPHORE_DB_DIALECT=postgres
+      - SEMAPHORE_DB_HOST=postgresql
+      - SEMAPHORE_DB_NAME=${SEMAPHORE_DATABASE:?err}
+      - SEMAPHORE_DB_PORT=${PORT_POSTGRES:?err}
+      - SEMAPHORE_DB_USER=${POSTGRES_USER:?err}
+      - SEMAPHORE_DB_PASS=${POSTGRES_PASSWORD:?err}
+      # Admin user
+      - SEMAPHORE_ADMIN_NAME=${SEMAPHORE_ADMIN_USER:?err}
+      - SEMAPHORE_ADMIN_EMAIL=${SEMAPHORE_ADMIN_EMAIL:?err}
+      - SEMAPHORE_ADMIN_PASSWORD=${SEMAPHORE_ADMIN_PASSWORD:?err}
+      - SEMAPHORE_ADMIN=${SEMAPHORE_ADMIN_USER:?err}
+      # Access configuration
+      - SEMAPHORE_ACCESS_KEY_ENCRYPTION=${SEMAPHORE_ACCESS_KEY:?err}
+      # Web configuration
+      - SEMAPHORE_WEB_HOST=0.0.0.0
+      - SEMAPHORE_PORT=${PORT_SEMAPHORE:?err}
+      # Features
+      - SEMAPHORE_LDAP_ENABLE=false
+      - SEMAPHORE_DEMO_MODE=false
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.semaphore.service=semaphore
+      - traefik.http.routers.semaphore.rule=Host(`semaphore.${INTRANET_DOMAIN:?err}`)
+      - traefik.http.routers.semaphore.entrypoints=websecure
+      - traefik.http.routers.semaphore.middlewares=authentik-forwardauth@file
+      - traefik.http.services.semaphore.loadbalancer.server.scheme=http
+      - traefik.http.services.semaphore.loadbalancer.server.port=${PORT_SEMAPHORE:?err}
+
+  ###########################################################################
+  # PostgreSQL - Shared Database
+  ###########################################################################
+  postgresql:
+    image: docker.io/library/postgres:18  # major upgrades only via dump/restore
+    container_name: postgresql
+    restart: unless-stopped
+    networks:
+      - management
+    # user: ${PUID:?err}:${PGID:?err}  # FIXME
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_POSTGRES:?err}:5432
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "${SEMAPHORE_DATABASE}"]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 5s
+    volumes:
+      - postgresql-data:/var/lib/postgresql  # postgres 18+ keeps data in /var/lib/postgresql/18/docker
+    environment:
+      - TZ=${TIMEZONE:?err}
+      - POSTGRES_DB=${SEMAPHORE_DATABASE:?err}  # guacamole DB is created by setup_guacamole.sh
+      - POSTGRES_USER=${POSTGRES_USER:?err}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?err}
+
+  ###########################################################################
+  # Traefik-KOP - Service Discovery Agent
+  ###########################################################################
+  traefik-kop:
+    image: "ghcr.io/jittering/traefik-kop:0.17@sha256:af5e720209798c746051aaa5313115bce185512c0f85b0ff4abe51dd76b3aabd"
+    container_name: traefik-kop
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - "REDIS_ADDR=${INTRANET_GATEWAY_IP:?err}:${PORT_VALKEY:?err}"
+      - "REDIS_DB=${VALKEY_TRAEFIK_KOP:?err}"
+      - "BIND_IP=${LOCAL_DOCKER_IP:?err}"
+    networks:
+      - management

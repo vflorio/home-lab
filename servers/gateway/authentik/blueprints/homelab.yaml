@@ -1,0 +1,53 @@
+# yaml-language-server: $schema=https://goauthentik.io/blueprints/schema.json
+#
+# Homelab Authentik configuration, applied by the worker at startup, whenever this file
+# changes and periodically. Objects are matched by their identifiers, so this updates the
+# ones created from the UI instead of duplicating them. Changes made in the UI to the
+# attributes below are overwritten on the next apply
+#
+# INTRANET_DOMAIN comes from the compose environment (gateway.intranet.vflorio.com)
+
+version: 1
+metadata:
+  name: Homelab - forward auth
+  labels:
+    blueprints.goauthentik.io/description: "Forward auth for every *.intranet.vflorio.com app behind Traefik"
+
+entries:
+  # One domain-level forward auth provider covers every router using authentik-forwardauth@file
+  - model: authentik_providers_proxy.proxyprovider
+    id: forward-auth-provider
+    identifiers:
+      name: Provider for Authentik
+    attrs:
+      mode: forward_domain
+      external_host: !Format ["https://auth.%s", !Env INTRANET_DOMAIN]
+      cookie_domain: intranet.vflorio.com
+      access_token_validity: hours=24
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-explicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+
+  - model: authentik_core.application
+    identifiers:
+      slug: authentik
+    attrs:
+      name: Authentik
+      provider: !KeyOf forward-auth-provider
+      meta_launch_url: !Format ["https://auth.%s", !Env INTRANET_DOMAIN]
+      open_in_new_tab: false
+
+  - model: authentik_outposts.outpost
+    identifiers:
+      managed: goauthentik.io/outposts/embedded
+    attrs:
+      providers:
+        - !KeyOf forward-auth-provider
+      config:
+        authentik_host: !Format ["https://auth.%s", !Env INTRANET_DOMAIN]
+
+  - model: authentik_brands.brand
+    identifiers:
+      domain: authentik-default
+    attrs:
+      branding_title: Homelab - Authentik
+
