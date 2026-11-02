@@ -63,3 +63,61 @@ resource "cloudflare_record" "intranet" {
     proxied = false
     ttl = 3600
 }
+
+# Email
+#
+# The domain sends and receives no mail: null MX (RFC 7505), SPF/DMARC/DKIM that
+# reject everything, so nobody can spoof @vflorio.com
+
+resource "cloudflare_record" "null_mx" {
+    name = "@"
+    type = "MX"
+    zone_id = var.cloudflare_zone_id
+    content = "."
+    priority = 0
+    ttl = 3600
+}
+
+resource "cloudflare_record" "spf" {
+    name = "@"
+    type = "TXT"
+    zone_id = var.cloudflare_zone_id
+    content = "\"v=spf1 -all\""
+    ttl = 3600
+}
+
+resource "cloudflare_record" "dmarc" {
+    name = "_dmarc"
+    type = "TXT"
+    zone_id = var.cloudflare_zone_id
+    content = "\"v=DMARC1; p=reject; sp=reject; adkim=s; aspf=s\""
+    ttl = 3600
+}
+
+resource "cloudflare_record" "dkim" {
+    name = "*._domainkey"
+    type = "TXT"
+    zone_id = var.cloudflare_zone_id
+    content = "\"v=DKIM1; p=\""
+    ttl = 3600
+}
+
+# CAA
+#
+# Only Let's Encrypt (Traefik DNS-01) may issue certificates. Cloudflare adds the CAA
+# records for its own Universal SSL CAs automatically
+
+resource "cloudflare_record" "caa" {
+    for_each = toset(["issue", "issuewild"])
+
+    name = "@"
+    type = "CAA"
+    zone_id = var.cloudflare_zone_id
+    ttl = 3600
+
+    data {
+        flags = 0
+        tag = each.value
+        value = "letsencrypt.org"
+    }
+}

@@ -39,7 +39,15 @@ sudo chown -R 0:0 config
 sudo chmod -R 775 config
 ```
 
-### 3. Inizializzazione Terraform
+### 3. Chiave TSIG
+
+`config/named.conf.key` non è versionato (vedi `named.conf.key.example`). Per generarla, o ruotarla, dalla workstation:
+
+```bash
+./rotate-tsig.sh   # scrive la chiave in locale e in terraform.tfvars, la carica sul server e riavvia bind9
+```
+
+### 4. Inizializzazione Terraform
 
 ```bash
 # Entrare nella directory terraform

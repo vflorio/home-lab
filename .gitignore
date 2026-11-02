@@ -7,7 +7,9 @@ terraform.tfstate
 terraform.tfstate.backup
 
 terraform/templates
-dns/bind/*.jnl
+dns/bind9/config/*.jnl
+dns/bind9/config/named.conf.key
+dns/bind9/config/*.bak-*
 
 *.old
 *.old.*
