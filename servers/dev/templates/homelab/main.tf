@@ -1,5 +1,6 @@
 ###########################################################################
 # Homelab workspace: Docker container on the dev server with
+# - a toolchain picked from the "stack" parameter (one build/Dockerfile target each)
 # - a Gitea repo cloned on first start (auth through Coder's Gitea external auth)
 # - VS Code in the browser (code-server) + VS Code desktop / SSH via the Coder agent
 # - persistent home volume, everything else is rebuilt from build/Dockerfile
@@ -28,6 +29,43 @@ data "coder_workspace_owner" "me" {}
 # the agent then uses that token for git over https (GIT_ASKPASS)
 data "coder_external_auth" "gitea" {
   id = "gitea"
+}
+
+data "coder_parameter" "stack" {
+  name         = "stack"
+  display_name = "Stack"
+  description  = "Toolchain del workspace, ognuna è un target di build/Dockerfile. Si può cambiare in seguito: la home resta"
+  type         = "string"
+  default      = "node"
+  mutable      = true
+  order        = 0
+  form_type    = "radio"
+
+  option {
+    name  = "Node + Bun"
+    value = "node"
+    icon  = "/icon/nodejs.svg"
+  }
+  option {
+    name  = "Python"
+    value = "python"
+    icon  = "/icon/python.svg"
+  }
+  option {
+    name  = "Rust"
+    value = "rust"
+    icon  = "/icon/rust.svg"
+  }
+  option {
+    name  = "Scala"
+    value = "scala"
+    icon  = "/icon/scala.svg"
+  }
+  option {
+    name  = "Elixir"
+    value = "elixir"
+    icon  = "/icon/elixir.svg"
+  }
 }
 
 data "coder_parameter" "repo" {
@@ -69,6 +107,17 @@ locals {
   repo_url  = local.repo == "" ? "" : (startswith(local.repo, "https://") ? "${local.repo}.git" : "${local.gitea_url}/${local.repo}.git")
   repo_dir  = local.repo == "" ? "/home/coder" : "/home/coder/${basename(local.repo)}"
 
+  stack = data.coder_parameter.stack.value
+
+  # Open VSX ids, installed into the persistent home on first start of each stack
+  extensions = {
+    node   = ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode", "oven.bun-vscode"]
+    python = ["ms-python.python", "charliermarsh.ruff"]
+    rust   = ["rust-lang.rust-analyzer", "tamasfe.even-better-toml"]
+    scala  = ["scalameta.metals"]
+    elixir = ["JakeBecker.elixir-ls"]
+  }
+
   container_name = "coder-${data.coder_workspace_owner.me.name}-${lower(data.coder_workspace.me.name)}"
   git_name       = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
   build_hash     = substr(sha1(join("", [for f in fileset("${path.module}/build", "**") : filesha1("${path.module}/build/${f}")])), 0, 12)
@@ -84,6 +133,14 @@ resource "coder_agent" "main" {
     GIT_AUTHOR_EMAIL    = data.coder_workspace_owner.me.email
     GIT_COMMITTER_NAME  = local.git_name
     GIT_COMMITTER_EMAIL = data.coder_workspace_owner.me.email
+  }
+
+  metadata {
+    display_name = "Stack"
+    key          = "00_stack"
+    script       = "echo ${local.stack}"
+    interval     = 3600
+    timeout      = 1
   }
 
   metadata {
@@ -144,6 +201,9 @@ resource "coder_script" "code_server" {
   icon         = "/icon/code.svg"
   run_on_start = true
   script       = <<-EOT
+    for ext in ${join(" ", local.extensions[local.stack])}; do
+      code-server --list-extensions | grep -qix "$ext" || code-server --install-extension "$ext" >/dev/null 2>&1 || true
+    done
     code-server --auth none --bind-addr 127.0.0.1:13337 --disable-telemetry >/tmp/code-server.log 2>&1 &
   EOT
 }
@@ -167,10 +227,11 @@ resource "coder_app" "code_server" {
 }
 
 resource "docker_image" "workspace" {
-  name         = "coder-homelab:${local.build_hash}"
-  keep_locally = true # shared by every workspace, not removed when one stops
+  name         = "coder-homelab-${local.stack}:${local.build_hash}"
+  keep_locally = true # shared by every workspace of the same stack, not removed when one stops
   build {
     context = "${path.module}/build"
+    target  = local.stack
   }
 }
 
