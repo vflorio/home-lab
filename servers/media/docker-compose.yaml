@@ -43,7 +43,7 @@ services:
       - traefik.http.routers.jellyfin.service=jellyfin
       - traefik.http.routers.jellyfin.rule=Host(`jellyfin.${INTRANET_DOMAIN:?err}`)
       - traefik.http.routers.jellyfin.entrypoints=websecure
-      - traefik.http.routers.jellyfin.middlewares=authentik-forwardauth@file
+      # no authentik-forwardauth: TV/mobile apps can't pass it, Jellyfin logs in via Authentik LDAP (see README)
       - traefik.http.services.jellyfin.loadbalancer.server.scheme=http
       - traefik.http.services.jellyfin.loadbalancer.server.port=${PORT_JELLYFIN:?err}
 
@@ -68,7 +68,7 @@ services:
       - traefik.http.routers.emby.service=emby
       - traefik.http.routers.emby.rule=Host(`emby.${INTRANET_DOMAIN:?err}`)
       - traefik.http.routers.emby.entrypoints=websecure
-      - traefik.http.routers.emby.middlewares=authentik-forwardauth@file
+      # no authentik-forwardauth: TV/mobile apps can't pass it, Emby logs in via Authentik LDAP (see README)
       - traefik.http.services.emby.loadbalancer.server.scheme=http
       - traefik.http.services.emby.loadbalancer.server.port=${PORT_EMBY:?err}
 

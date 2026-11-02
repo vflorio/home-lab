@@ -1,0 +1,132 @@
+# yaml-language-server: $schema=https://goauthentik.io/blueprints/schema.json
+#
+# LDAP for the apps whose clients only have a username/password form (Jellyfin and Emby on
+# TVs/mobile apps), served by the authentik-ldap outpost container (LDAPS only, LAN/tailnet).
+# One provider for every app: Authentik misbehaves with several providers on the same base DN,
+# access is limited per app by the group filters in the app (see servers/media/README)
+#
+# The bind flow has no MFA (TVs can't do it). Users can bind with an app password
+# (Authentik > Settings > Tokens and App passwords) instead of their real password
+#
+# INTRANET_DOMAIN and LDAP_SERVICE_PASSWORD come from the compose environment
+
+version: 1
+metadata:
+  name: Homelab - LDAP
+  labels:
+    blueprints.goauthentik.io/description: "LDAP provider and outpost for Jellyfin and Emby"
+
+entries:
+  ###########################################################################
+  # Bind flow: username + password (or app password), no MFA
+  ###########################################################################
+  - model: authentik_stages_password.passwordstage
+    id: ldap-password-stage
+    identifiers:
+      name: ldap-authentication-password
+    attrs:
+      backends:
+        - authentik.core.auth.InbuiltBackend
+        - authentik.core.auth.TokenBackend  # app passwords
+
+  - model: authentik_stages_identification.identificationstage
+    id: ldap-identification-stage
+    identifiers:
+      name: ldap-identification-stage
+    attrs:
+      user_fields:
+        - username
+        - email
+      password_stage: !KeyOf ldap-password-stage
+
+  - model: authentik_stages_user_login.userloginstage
+    id: ldap-login-stage
+    identifiers:
+      name: ldap-authentication-login
+
+  - model: authentik_flows.flow
+    id: ldap-flow
+    identifiers:
+      slug: ldap-authentication-flow
+    attrs:
+      name: ldap-authentication-flow
+      title: LDAP
+      designation: authentication
+
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf ldap-flow
+      stage: !KeyOf ldap-identification-stage
+    attrs:
+      order: 10
+
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf ldap-flow
+      stage: !KeyOf ldap-login-stage
+    attrs:
+      order: 30
+
+  ###########################################################################
+  # Access groups, members are added from the Authentik UI (not touched by this blueprint)
+  ###########################################################################
+  - model: authentik_core.group
+    identifiers:
+      name: jellyfin_users
+  - model: authentik_core.group
+    identifiers:
+      name: jellyfin_admins
+  - model: authentik_core.group
+    identifiers:
+      name: emby_users
+
+  ###########################################################################
+  # Service account the apps bind with to search users
+  # DN: cn=ldapservice,ou=users,dc=ldap,dc=goauthentik,dc=io
+  ###########################################################################
+  - model: authentik_core.user
+    id: ldap-service-user
+    identifiers:
+      username: ldapservice
+    attrs:
+      name: LDAP service account
+      type: service_account
+      password: !Env LDAP_SERVICE_PASSWORD
+
+  ###########################################################################
+  # Provider, application and outpost
+  ###########################################################################
+  - model: authentik_providers_ldap.ldapprovider
+    id: ldap-provider
+    identifiers:
+      name: LDAP
+    attrs:
+      authorization_flow: !KeyOf ldap-flow  # "Bind flow" in the UI
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-invalidation-flow]]
+      base_dn: dc=ldap,dc=goauthentik,dc=io
+      certificate: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+      bind_mode: cached
+      search_mode: cached
+      mfa_support: false
+    permissions:
+      - permission: search_full_directory
+        user: !KeyOf ldap-service-user
+
+  - model: authentik_core.application
+    identifiers:
+      slug: ldap
+    attrs:
+      name: LDAP
+      provider: !KeyOf ldap-provider
+
+  # Deployed by hand (authentik-ldap in servers/gateway/docker-compose.yaml), its token is
+  # shown in Applications > Outposts > LDAP > View Deployment Info
+  - model: authentik_outposts.outpost
+    identifiers:
+      name: LDAP
+    attrs:
+      type: ldap
+      providers:
+        - !KeyOf ldap-provider
+      config:
+        authentik_host: !Format ["https://auth.%s", !Env INTRANET_DOMAIN]

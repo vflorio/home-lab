@@ -104,6 +104,7 @@ services:
       - CLOUD_INTRANET_DOMAIN=${CLOUD_INTRANET_DOMAIN:?err}  # used by the cloud-oidc blueprint
       - NEXTCLOUD_OIDC_CLIENT_SECRET=${NEXTCLOUD_OIDC_CLIENT_SECRET:?err}
       - IMMICH_OIDC_CLIENT_SECRET=${IMMICH_OIDC_CLIENT_SECRET:?err}
+      - LDAP_SERVICE_PASSWORD=${LDAP_SERVICE_PASSWORD:?err}  # used by the ldap blueprint
     volumes:
       - ${PATH_DATA:?err}/authentik/media:/media
       - ${PATH_DATA:?err}/authentik/templates:/templates
@@ -155,6 +156,7 @@ services:
       - CLOUD_INTRANET_DOMAIN=${CLOUD_INTRANET_DOMAIN:?err}  # used by the cloud-oidc blueprint
       - NEXTCLOUD_OIDC_CLIENT_SECRET=${NEXTCLOUD_OIDC_CLIENT_SECRET:?err}
       - IMMICH_OIDC_CLIENT_SECRET=${IMMICH_OIDC_CLIENT_SECRET:?err}
+      - LDAP_SERVICE_PASSWORD=${LDAP_SERVICE_PASSWORD:?err}  # used by the ldap blueprint
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${PATH_DATA:?err}/authentik/certs:/certs
@@ -168,6 +170,27 @@ services:
       valkey:
         condition: service_healthy
         restart: true
+
+  ###########################################################################
+  # Authentik LDAP outpost - for Jellyfin/Emby (provider in authentik/blueprints/ldap.yaml)
+  # LDAPS only, on the LAN IP: passwords never travel in clear text
+  ###########################################################################
+  authentik-ldap:
+    image: ghcr.io/goauthentik/ldap:${AUTHENTIK_VERSION:?err}  # same version as server/worker
+    container_name: authentik-ldap
+    restart: unless-stopped
+    networks:
+      - gateway
+    environment:
+      - TZ=${TIMEZONE:?err}
+      - AUTHENTIK_HOST=http://authentik:9000
+      - AUTHENTIK_INSECURE=false
+      # empty until the blueprint created the outpost: Applications > Outposts > LDAP > View Deployment Info
+      - AUTHENTIK_TOKEN=${AUTHENTIK_LDAP_TOKEN:-}
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_LDAPS:?err}:6636
+    depends_on:
+      - authentik
 
   ###########################################################################
   # CrowdSec - Security & Intrusion Detection

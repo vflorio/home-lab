@@ -32,7 +32,7 @@ Single Proxmox VE node (**silicon**) hosting infrastructure VMs (DNS, NAS, firew
 
 - No port forwards and no public app records.
 - Remote access via **Tailscale** only: subnet router for 192.168.1.0/24 and split DNS `intranet.vflorio.com` → 192.168.1.150.
-- All web UIs are served over HTTPS by Traefik, with CrowdSec on every router and Authentik on every router: forward auth for apps without their own login, OIDC for apps that have one (Coder, Gitea, Grafana, Portainer, Semaphore, Guacamole, Vaultwarden, Nextcloud, Immich). Navidrome keeps its own login because Subsonic clients can't pass forward auth.
+- All web UIs are served over HTTPS by Traefik, with CrowdSec on every router and Authentik on every router: forward auth for apps without their own login, OIDC for apps that have one (Coder, Gitea, Grafana, Portainer, Semaphore, Guacamole, Vaultwarden, Nextcloud, Immich), LDAP for Jellyfin and Emby (TV clients). Navidrome keeps its own login because Subsonic clients can't pass forward auth.
 
 ## Physical devices
 
@@ -121,6 +121,7 @@ Every application server also runs **Traefik-kop** (publishes local routers to t
 |---|---|---|---|
 | Traefik | Reverse proxy & TLS | https://traefik.gateway.intranet.vflorio.com/dashboard/ | 192.168.1.190:8082 (metrics) |
 | Authentik | SSO / forward auth | https://auth.gateway.intranet.vflorio.com | 192.168.1.190:6080 |
+| Authentik LDAP | LDAP outpost for Jellyfin/Emby (LDAPS) | — | 192.168.1.190:636 |
 | Tailscale | VPN · subnet router · split DNS | https://login.tailscale.com/admin/machines | no inbound ports |
 | CrowdSec | IDS + Traefik bouncer + AppSec WAF | - | 192.168.1.190:6060/metrics |
 

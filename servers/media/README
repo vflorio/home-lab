@@ -1,0 +1,71 @@
+## Login con Authentik (LDAP) per Jellyfin ed Emby
+
+Le app TV/mobile hanno solo username e password: non possono fare OIDC né passare il forward auth
+di Traefik. Jellyfin ed Emby verificano quindi le credenziali su Authentik via LDAP, tramite
+l'outpost `authentik-ldap` sul gateway (solo LDAPS, porta 636 su 192.168.1.190).
+Provider, flow e gruppi sono in `servers/gateway/authentik/blueprints/ldap.yaml`.
+
+Il bind LDAP **non ha MFA** (una TV non può chiederla). Per non digitare la password vera sulle TV
+si può usare una app password: Authentik > Impostazioni utente > Token e app password.
+
+### Gateway
+
+```bash
+cd servers/gateway
+# 1. LDAP_SERVICE_PASSWORD in .env, poi ricrea Authentik per caricare il blueprint
+docker compose up -d authentik authentic-worker
+# 2. Authentik > Applications > Outposts > LDAP > View Deployment Info: copia il token
+#    in AUTHENTIK_LDAP_TOKEN nel .env, poi avvia l'outpost
+docker compose up -d authentik-ldap
+# 3. Verifica (deve elencare gli utenti)
+ldapsearch -H ldaps://192.168.1.190 -x \
+  -D cn=ldapservice,ou=users,dc=ldap,dc=goauthentik,dc=io -w "$LDAP_SERVICE_PASSWORD" \
+  -b dc=ldap,dc=goauthentik,dc=io "(objectClass=user)" cn
+```
+
+In Authentik > Directory > Groups aggiungi gli utenti a `jellyfin_users` / `emby_users`
+(e `jellyfin_admins` per gli admin di Jellyfin). Chi non è nel gruppo non può entrare.
+
+Valori comuni ai due plugin:
+
+- Server: `192.168.1.190`, porta `636`, SSL attivo
+- Bind DN: `cn=ldapservice,ou=users,dc=ldap,dc=goauthentik,dc=io`
+- Bind password: `LDAP_SERVICE_PASSWORD` di `servers/gateway/.env`
+- Base DN: `dc=ldap,dc=goauthentik,dc=io`
+
+Il certificato è l'"authentik Self-signed Certificate", quindi non è firmato da una CA nota.
+
+### Jellyfin
+
+Dashboard > Plugin > Catalogo > installa "LDAP Authentication", riavvia Jellyfin, poi nelle
+impostazioni del plugin:
+
+- LDAP Server / Port / Secure LDAP: vedi sopra
+- Skip SSL/TLS Verification: on (certificato self-signed)
+- LDAP Bind User / Password / Base DN: vedi sopra
+- LDAP Search Filter: `(memberOf=cn=jellyfin_users,ou=groups,dc=ldap,dc=goauthentik,dc=io)`
+- LDAP Admin Filter: `(memberOf=cn=jellyfin_admins,ou=groups,dc=ldap,dc=goauthentik,dc=io)`
+- LDAP Search Attributes: `uid, cn, mail, displayName`
+- LDAP Uid Attribute: `uid`, LDAP Username Attribute: `cn`
+- Enable User Creation: on, Library Access: le librerie per i nuovi utenti
+
+"Save and Test LDAP Server Settings" deve trovare gli utenti. Un utente locale esistente passa a
+LDAP da Dashboard > Utenti > utente > Provider di autenticazione: "LDAP-Authentication".
+Tieni almeno un admin locale come accesso di emergenza.
+
+### Emby
+
+Il plugin "LDAP Authentication" richiede **Emby Premiere**. Plugin > Catalogo > installalo,
+riavvia Emby, poi:
+
+- Server / porta / SSL / Bind DN / Bind credentials: vedi sopra
+- User search base: `dc=ldap,dc=goauthentik,dc=io`
+- User search filter: `(&(sAMAccountName={0})(memberOf=cn=emby_users,ou=groups,dc=ldap,dc=goauthentik,dc=io))`
+- SSL certificate thumbprint (SHA1):
+
+  ```bash
+  openssl s_client -connect 192.168.1.190:636 </dev/null 2>/dev/null \
+    | openssl x509 -noout -fingerprint -sha1 | cut -d= -f2 | tr -d :
+  ```
+
+Si accede con lo username Authentik (non l'email). Gli admin di Emby restano account locali.

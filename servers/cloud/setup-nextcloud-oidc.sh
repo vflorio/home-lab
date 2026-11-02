@@ -28,6 +28,10 @@ fi
 
 occ() { sudo docker exec -u www-data "$NEXTCLOUD_CONTAINER" php occ "$@"; }
 
+# Authentik resolves to a LAN IP (192.168.1.190), which Nextcloud refuses to call by default
+echo "🌐 Allowing requests to LAN servers..."
+occ config:system:set allow_local_remote_servers --value=true --type=boolean
+
 echo "📦 Installing/enabling user_oidc..."
 occ app:install user_oidc 2>/dev/null || occ app:enable user_oidc
 
