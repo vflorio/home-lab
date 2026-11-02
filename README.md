@@ -32,7 +32,7 @@ Single Proxmox VE node (**silicon**) hosting infrastructure VMs (DNS, NAS, firew
 
 - No port forwards and no public app records.
 - Remote access via **Tailscale** only: subnet router for 192.168.1.0/24 and split DNS `intranet.vflorio.com` → 192.168.1.150.
-- All web UIs are served over HTTPS by Traefik, with CrowdSec and Authentik on every router.
+- All web UIs are served over HTTPS by Traefik, with CrowdSec on every router and Authentik on every router except apps whose native clients can't pass forward auth (Vaultwarden, Navidrome: own login).
 
 ## Physical devices
 
@@ -102,7 +102,7 @@ NFS shares exported by the NAS:
 
 | Share | Type | Usage | Mount point |
 |---|---|---|---|
-| ssd-0 | SSD | App data, photos, relax | `nas:/ssd-0` → `/mnt/nfs/ssd-0` |
+| ssd-0 | SSD | App data, photos, relax, *arr downloads & library | `nas:/ssd-0` → `/mnt/nfs/ssd-0` |
 | media-0 | SMR HDD (JBOD) | Media library | `nas:/media-0` → `/mnt/nfs/media-0` |
 | media-1 | SMR HDD (JBOD) | Media library | `nas:/media-1` → `/mnt/nfs/media-1` |
 | media-2 | SMR HDD (JBOD) | Media library | `nas:/media-2` → `/mnt/nfs/media-2` |
@@ -111,7 +111,7 @@ NFS shares exported by the NAS:
 
 Source of truth: [servers/management/homepage/services.yaml](servers/management/homepage/services.yaml).
 
-URLs go through Traefik on the gateway (Let's Encrypt via Cloudflare DNS-01, LAN and tailnet only, CrowdSec + Authentik). The direct `ip:port` endpoints bypass Traefik/Authentik.
+URLs go through Traefik on the gateway (Let's Encrypt via Cloudflare DNS-01, LAN and tailnet only, CrowdSec + Authentik; Vaultwarden and Navidrome skip Authentik). The direct `ip:port` endpoints bypass Traefik/Authentik.
 
 Every application server also runs **Traefik-kop** (publishes local routers to the gateway's Valkey); all except management run a **Portainer Agent** on `:9001`.
 
@@ -140,11 +140,12 @@ Every application server also runs **Traefik-kop** (publishes local routers to t
 | Portainer | Container management (all servers) | https://portainer.management.intranet.vflorio.com | 192.168.1.191:9000 |
 | Guacamole | Remote desktop gateway | https://guacamole.management.intranet.vflorio.com | 192.168.1.191:9200 |
 | Semaphore | Ansible UI | https://semaphore.management.intranet.vflorio.com | 192.168.1.191:3001 |
+| Vaultwarden | Password manager (Bitwarden compatible, admin at `/admin`) | https://vaultwarden.management.intranet.vflorio.com | 192.168.1.191:8222 |
 
 | Support service | Description | Endpoint |
 |---|---|---|
 | Guacd | Guacamole daemon | 192.168.1.191:4822 |
-| PostgreSQL | Semaphore, Guacamole DB | 192.168.1.191:5432 |
+| PostgreSQL | Semaphore, Guacamole, Vaultwarden DB | 192.168.1.191:5432 |
 
 ### Media — srv-media (192.168.1.192)
 
@@ -152,7 +153,7 @@ Every application server also runs **Traefik-kop** (publishes local routers to t
 |---|---|---|---|
 | Jellyfin | Media server | https://jellyfin.media.intranet.vflorio.com | 192.168.1.192:8096 |
 | Emby | Media server | https://emby.media.intranet.vflorio.com | 192.168.1.192:8097 |
-| Jellyseerr | Movie & TV requests | https://jellyseerr.media.intranet.vflorio.com | 192.168.1.192:5055 |
+| Navidrome | Music streaming (Subsonic API) | https://navidrome.media.intranet.vflorio.com | 192.168.1.192:4533 |
 | Sonarr | TV series | https://sonarr.media.intranet.vflorio.com | 192.168.1.192:8989 |
 | Radarr | Movies | https://radarr.media.intranet.vflorio.com | 192.168.1.192:7878 |
 | Lidarr | Music | https://lidarr.media.intranet.vflorio.com | 192.168.1.192:8686 |
@@ -167,6 +168,16 @@ Every application server also runs **Traefik-kop** (publishes local routers to t
 |---|---|---|
 | Unpackerr | Archive extraction for *arr | 192.168.1.192:5656/metrics |
 | Tdarr Node | Transcoding worker | - |
+
+*arr layout (temporary, all on ssd-0 so imports are hardlinks; to be moved to the SMR disks after checking the I/O impact). Inside the *arr / download containers `/mnt/nfs` is mounted as `/media`:
+
+| Path | Content |
+|---|---|
+| `/mnt/nfs/ssd-0/homelab-data/media/downloads/torrents/{tv,movies,music}` | qBittorrent, one category per *arr |
+| `/mnt/nfs/ssd-0/homelab-data/media/downloads/usenet/{incomplete,complete/{tv,movies,music}}` | SABnzbd |
+| `/mnt/nfs/ssd-0/homelab-data/media/library/{tv,movies,music}` | Sonarr / Radarr / Lidarr root folders; Jellyfin `/mnt/library`, Navidrome `/music` |
+
+Indexers live in Prowlarr only (public ones, Cloudflare-protected via the `flaresolverr` tag) and are synced to Sonarr/Radarr/Lidarr. Quality profile `HD-1080p` prefers Italian audio (custom formats ITA +100, ENG +25). Bazarr: ITA+ENG subtitles, providers that need no account.
 
 ### Dev — srv-dev (192.168.1.193)
 

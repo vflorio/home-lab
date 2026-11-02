@@ -16,7 +16,7 @@
 - Valkey/Redis (Cache)
 - Homepage/Heimdall/Homarr (Dashboards)
 - Semaphore (Ansible UI)
-- [TODO] VaultWarden (Password manager)
+- VaultWarden (Password manager)
 
 (media server)
 
@@ -24,7 +24,7 @@
 - Sonarr/Radarr/Lidarr (Automation)
 - Prowlarr (Indexer Management)
 - qBittorrent/SABnzbd (Download)
-- Jellyseerr (Request Management)
+- Navidrome (Music Streaming)
 - Bazarr (Subtitles)
 - Tdarr (Transcoding)
 - Unpackerr (Processing)
@@ -42,7 +42,3 @@
 - Nextcloud (Cloud storage)
 - OnlyOffice (Office suite)
 - Immich (Photo management)
-
-TODO:
-- Servarr stack + Navidrome
-- Aggiornamenti: apt su tutti i server e immagini

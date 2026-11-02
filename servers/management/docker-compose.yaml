@@ -163,7 +163,7 @@ services:
     ports:
       - ${LOCAL_DOCKER_IP:?err}:${PORT_HOMEPAGE:?err}:3000
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./homepage:/app/config
     environment:
       #- UMASK=${UMASK:?err}
@@ -238,6 +238,40 @@ services:
       - traefik.http.routers.semaphore.middlewares=authentik-forwardauth@file
       - traefik.http.services.semaphore.loadbalancer.server.scheme=http
       - traefik.http.services.semaphore.loadbalancer.server.port=${PORT_SEMAPHORE:?err}
+
+  ###########################################################################
+  # Vaultwarden - Password Manager (Bitwarden compatible)
+  ###########################################################################
+  vaultwarden:
+    image: vaultwarden/server:1.37.4
+    container_name: vaultwarden
+    restart: unless-stopped
+    depends_on:
+      postgresql:
+        condition: service_healthy
+        restart: true
+    networks:
+      - management
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_VAULTWARDEN:?err}:80
+    volumes:
+      - ${PATH_DATA:?err}/vaultwarden:/data  # attachments, sends, rsa keys (vault itself is in postgres)
+    environment:
+      - TZ=${TIMEZONE:?err}
+      - DOMAIN=https://vaultwarden.${INTRANET_DOMAIN:?err}
+      - DATABASE_URL=postgresql://${VAULTWARDEN_DB_USER:?err}:${VAULTWARDEN_DB_PASSWORD:?err}@postgresql:${PORT_POSTGRES:?err}/${VAULTWARDEN_DATABASE:?err}  # DB/role created by setup-vaultwarden.sh
+      - ADMIN_TOKEN=${VAULTWARDEN_ADMIN_TOKEN:?err}  # argon2 hash, admin panel at /admin
+      - SIGNUPS_ALLOWED=false  # new accounts only via invite from /admin
+      - INVITATIONS_ALLOWED=true
+      - SHOW_PASSWORD_HINT=false
+    labels:
+      # no authentik-forwardauth: Bitwarden apps/extensions can't pass it, Vaultwarden has its own login
+      - traefik.enable=true
+      - traefik.http.routers.vaultwarden.service=vaultwarden
+      - traefik.http.routers.vaultwarden.rule=Host(`vaultwarden.${INTRANET_DOMAIN:?err}`)
+      - traefik.http.routers.vaultwarden.entrypoints=websecure
+      - traefik.http.services.vaultwarden.loadbalancer.server.scheme=http
+      - traefik.http.services.vaultwarden.loadbalancer.server.port=${PORT_VAULTWARDEN:?err}
 
   ###########################################################################
   # PostgreSQL - Shared Database

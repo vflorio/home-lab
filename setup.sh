@@ -7,10 +7,12 @@ PATH_DATA=/mnt/nfs/ssd-0/homelab-data
 mkdir -p $PATH_DATA/gateway/{authentik/{certs,media,templates},crowdsec,headscale,headplane,valkey}
 
 # Management
-mkdir -p $PATH_DATA/management/{grafana,prometheus,portainer,homepage,semaphore}
+mkdir -p $PATH_DATA/management/{grafana,prometheus,portainer,homepage,semaphore,vaultwarden}
 
 # Media
-mkdir -p $PATH_DATA/media/{jellyfin,emby,jellyseerr,qbittorrent,sabnzbd,prowlarr,sonarr,radarr,lidarr,bazarr,unpackerr,logs,tdarr}
+mkdir -p $PATH_DATA/media/{jellyfin,emby,navidrome,qbittorrent,sabnzbd,prowlarr,sonarr,radarr,lidarr,bazarr,unpackerr,logs,tdarr}
+# *arr downloads + library on the same export so imports are hardlinks
+mkdir -p $PATH_DATA/media/downloads/torrents/{tv,movies,music} $PATH_DATA/media/downloads/usenet/{incomplete,complete/{tv,movies,music}} $PATH_DATA/media/library/{tv,movies,music}
 
 # Dev 
 mkdir -p $PATH_DATA/dev/{coder,gitea,container-registry,verdaccio}

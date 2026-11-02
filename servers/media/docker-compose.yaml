@@ -26,6 +26,7 @@ services:
       - ${PATH_MEDIA:?err}/media-0:/mnt/media-0/
       - ${PATH_MEDIA:?err}/media-1:/mnt/media-1/
       - ${PATH_MEDIA:?err}/media-2:/mnt/media-2/
+      - ${PATH_LIBRARY:?err}:/mnt/library/:ro  # *arr managed library (tv, movies)
       - ${PATH_DATA:?err}/jellyfin:/config
       #- ${PATH_MEDIA:?err}:/mnt/media/ # FIXME non vengono risolti i link simbolici
     environment:
@@ -70,34 +71,6 @@ services:
       - traefik.http.routers.emby.middlewares=authentik-forwardauth@file
       - traefik.http.services.emby.loadbalancer.server.scheme=http
       - traefik.http.services.emby.loadbalancer.server.port=${PORT_EMBY:?err}
-
-  ###########################################################################
-  # Jellyseerr - Media Request Management
-  ###########################################################################
-  jellyseerr:
-    image: fallenbagel/jellyseerr:2.7.3
-    container_name: jellyseerr
-    restart: unless-stopped
-    networks:
-      - media
-    volumes:
-      - ${PATH_MEDIA:?err}:/mnt/media/
-      - ${PATH_DATA:?err}/jellyseerr:/app/config
-    environment:
-#      - PUID=${PUID:?err}
-#      - PGID=${PGID:?err}
-#      - UMASK=${UMASK:?err}
-      - TZ=${TIMEZONE:?err}
-    ports:
-      - ${LOCAL_DOCKER_IP:?err}:${PORT_JELLYSEERR:?err}:5055
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.jellyseerr.service=jellyseerr
-      - traefik.http.routers.jellyseerr.rule=Host(`jellyseerr.${INTRANET_DOMAIN:?err}`)
-      - traefik.http.routers.jellyseerr.entrypoints=websecure
-      - traefik.http.routers.jellyseerr.middlewares=authentik-forwardauth@file
-      - traefik.http.services.jellyseerr.loadbalancer.server.scheme=http
-      - traefik.http.services.jellyseerr.loadbalancer.server.port=${PORT_JELLYSEERR:?err}
 
   ###########################################################################
   # qBittorrent - Torrent Client
@@ -378,72 +351,28 @@ services:
       ## Folder Settings
       - UN_FOLDERS_INTERVAL=1s
       - UN_FOLDERS_BUFFER=20000
-      ## Sonarr Settings
-      ## Sonarr Config - Copy API Key from: http://sonarr:8989/general/settings
+      ## Sonarr / Radarr / Lidarr (API keys from each app: Settings > General)
       - UN_SONARR_0_URL=http://sonarr:8989
-      - UN_SONARR_0_API_KEY=0123456789abcdef0123456789abcdef
-      - UN_SONARR_0_PATHS_0=/data/torrents/anime
-      - UN_SONARR_0_PATHS_1=/data/torrents/tv
+      - UN_SONARR_0_API_KEY=${SONARR_API_KEY:?err}
+      - UN_SONARR_0_PATHS_0=/media/ssd-0/homelab-data/media/downloads/torrents/tv
       - UN_SONARR_0_PROTOCOLS=torrent
       - UN_SONARR_0_TIMEOUT=10s
       - UN_SONARR_0_DELETE_DELAY=5m
       - UN_SONARR_0_DELETE_ORIG=false
-      - UN_SONARR_0_SYNCTHING=false
-      ## Radarr Settings
-      ## Radarr Config - Copy API Key from: http://radarr:7878/general/settings
       - UN_RADARR_0_URL=http://radarr:7878
-      - UN_RADARR_0_API_KEY=0123456789abcdef0123456789abcdef
-      - UN_RADARR_0_PATHS_0=/data/torrents/movies
+      - UN_RADARR_0_API_KEY=${RADARR_API_KEY:?err}
+      - UN_RADARR_0_PATHS_0=/media/ssd-0/homelab-data/media/downloads/torrents/movies
       - UN_RADARR_0_PROTOCOLS=torrent
       - UN_RADARR_0_TIMEOUT=10s
       - UN_RADARR_0_DELETE_DELAY=5m
       - UN_RADARR_0_DELETE_ORIG=false
-      - UN_RADARR_0_SYNCTHING=false
-      ## Lidarr Settings
-      ## Lidarr Config - Copy API Key from: http://lidarr:8686/general/settings
       - UN_LIDARR_0_URL=http://lidarr:8686
-      - UN_LIDARR_0_API_KEY=0123456789abcdef0123456789abcdef
-      - UN_LIDARR_0_PATHS_0=/data/torrents/music
+      - UN_LIDARR_0_API_KEY=${LIDARR_API_KEY:?err}
+      - UN_LIDARR_0_PATHS_0=/media/ssd-0/homelab-data/media/downloads/torrents/music
       - UN_LIDARR_0_PROTOCOLS=torrent
       - UN_LIDARR_0_TIMEOUT=10s
       - UN_LIDARR_0_DELETE_DELAY=5m
       - UN_LIDARR_0_DELETE_ORIG=false
-      - UN_LIDARR_0_SYNCTHING=false
-      ## Watch Folders
-      - UN_FOLDER_0_PATH=/data/torrents/complete
-      - UN_FOLDER_0_EXTRACT_PATH=
-      - UN_FOLDER_0_DELETE_AFTER=10m
-      - UN_FOLDER_0_DISABLE_RECURSION=false
-      - UN_FOLDER_0_DELETE_FILES=false
-      - UN_FOLDER_0_DELETE_ORIGINAL=false
-      - UN_FOLDER_0_DISABLE_LOG=false
-      - UN_FOLDER_0_MOVE_BACK=false
-      - UN_FOLDER_0_EXTRACT_ISOS=false
-      ## Web Hooks
-      - UN_WEBHOOK_0_URL=https://notifiarr.com/api/v1/notification/unpackerr/api_key_from_notifiarr_com
-      - UN_WEBHOOK_0_NAME=
-      - UN_WEBHOOK_0_SILENT=false
-      - UN_WEBHOOK_0_EVENTS_0=1
-      - UN_WEBHOOK_0_EVENTS_1=4
-      - UN_WEBHOOK_0_EVENTS_2=6
-      - UN_WEBHOOK_0_NICKNAME=Unpackerr
-      - UN_WEBHOOK_0_CHANNEL=
-      - UN_WEBHOOK_0_EXCLUDE_0=lidarr
-      - UN_WEBHOOK_0_TEMPLATE_PATH=
-      - UN_WEBHOOK_0_TEMPLATE=
-      - UN_WEBHOOK_0_IGNORE_SSL=false
-      - UN_WEBHOOK_0_TIMEOUT=10s
-      - UN_WEBHOOK_0_CONTENT_TYPE=application/json
-      ## Command Hooks
-      - UN_CMDHOOK_0_COMMAND=/data/torrents/unpackerr.sh
-      - UN_CMDHOOK_0_NAME=
-      - UN_CMDHOOK_0_SHELL=false
-      - UN_CMDHOOK_0_SILENT=false
-      - UN_CMDHOOK_0_EVENTS_0=1
-      - UN_CMDHOOK_0_EVENTS_1=4
-      - UN_CMDHOOK_0_EVENTS_2=7
-      - UN_CMDHOOK_0_EXCLUDE_0=lidarr
-      - UN_CMDHOOK_0_TIMEOUT=10s
 
   ###########################################################################
   # Tdarr - Video Transcoding
@@ -501,6 +430,36 @@ services:
     networks:
       - media
 
+
+  ###########################################################################
+  # Navidrome - Music Streaming Server (Subsonic API)
+  ###########################################################################
+  navidrome:
+    image: deluan/navidrome:0.64.2
+    container_name: navidrome
+    restart: unless-stopped
+    user: ${PUID:?err}:${PGID:?err}
+    volumes:
+      - ${PATH_DATA:?err}/navidrome:/data
+      - ${PATH_LIBRARY:?err}/music:/music:ro  # filled by Lidarr
+    environment:
+      - TZ=${TIMEZONE:?err}
+      - ND_MUSICFOLDER=/music
+      - ND_SCANSCHEDULE=1h
+      - ND_LOGLEVEL=info
+      - ND_ENABLEINSIGHTSCOLLECTOR=false
+    networks:
+      - media
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_NAVIDROME:?err}:4533
+    labels:
+      # no authentik-forwardauth: Subsonic clients can't pass it, Navidrome has its own login
+      - traefik.enable=true
+      - traefik.http.routers.navidrome.service=navidrome
+      - traefik.http.routers.navidrome.rule=Host(`navidrome.${INTRANET_DOMAIN:?err}`)
+      - traefik.http.routers.navidrome.entrypoints=websecure
+      - traefik.http.services.navidrome.loadbalancer.server.scheme=http
+      - traefik.http.services.navidrome.loadbalancer.server.port=${PORT_NAVIDROME:?err}
 
   ###########################################################################
   # Portainer - Docker Management

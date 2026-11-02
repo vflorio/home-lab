@@ -107,6 +107,14 @@
         container: semaphore
         description: "UI per Ansible │ 🏠 semaphore.management.intranet.vflorio.com │ 🔌 192.168.1.191:3001"
 
+    - Vaultwarden:
+        icon: vaultwarden.png
+        href: https://vaultwarden.management.intranet.vflorio.com
+        server: management
+        container: vaultwarden
+        siteMonitor: http://192.168.1.191:8222/alive
+        description: "Password manager (Bitwarden), niente Authentik │ 🏠 vaultwarden.management.intranet.vflorio.com │ 🔌 192.168.1.191:8222 │ 🏠 admin vaultwarden.management.intranet.vflorio.com/admin"
+
 
 - Management · supporto:
     - Guacd:
@@ -118,7 +126,7 @@
         icon: postgres.png
         server: management
         container: postgresql
-        description: "DB Semaphore, Guacamole │ 🔒 192.168.1.191:5432"
+        description: "DB Semaphore, Guacamole, Vaultwarden │ 🔒 192.168.1.191:5432"
     - Traefik-kop:
         icon: traefik.png
         server: management
@@ -143,11 +151,11 @@
         siteMonitor: http://192.168.1.192:8097
         description: "Media server │ 🏠 emby.media.intranet.vflorio.com │ 🔌 192.168.1.192:8097"
 
-    - Jellyseerr:
-        icon: jellyseerr.png
-        href: https://jellyseerr.media.intranet.vflorio.com
-        siteMonitor: http://192.168.1.192:5055
-        description: "Richieste film & serie │ 🏠 jellyseerr.media.intranet.vflorio.com │ 🔌 192.168.1.192:5055"
+    - Navidrome:
+        icon: navidrome.png
+        href: https://navidrome.media.intranet.vflorio.com
+        siteMonitor: http://192.168.1.192:4533/ping
+        description: "Streaming musica (Subsonic), niente Authentik │ 🏠 navidrome.media.intranet.vflorio.com │ 🔌 192.168.1.192:4533"
 
     - Sonarr:
         icon: sonarr.png
@@ -165,7 +173,7 @@
         icon: lidarr.png
         href: https://lidarr.media.intranet.vflorio.com
         siteMonitor: http://192.168.1.192:8686
-        description: "Musica │ 🏠 lidarr.media.intranet.vflorio.com │ 🔌 192.168.1.192:8686"
+        description: "Musica → Navidrome │ 🏠 lidarr.media.intranet.vflorio.com │ 🔌 192.168.1.192:8686"
 
     - Bazarr:
         icon: bazarr.png
@@ -366,7 +374,7 @@
         description: "Traefik@gateway legge i router da Valkey (db 1), traefik-kop li pubblica da ogni server │ 🔒 → <ip server>:<porta app>"
     - Accesso & TLS:
         icon: mdi-certificate-outline
-        description: "Let's Encrypt DNS-01 (Cloudflare): *.<server>.intranet · entrypoint solo LAN + tailnet, CrowdSec e Authentik su ogni router"
+        description: "Let's Encrypt DNS-01 (Cloudflare): *.<server>.intranet · entrypoint solo LAN + tailnet, CrowdSec su ogni router, Authentik su tutti tranne Vaultwarden e Navidrome"
 
 - Hypervisor & VM:
     - silicon:
