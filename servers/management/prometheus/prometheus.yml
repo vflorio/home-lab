@@ -1,0 +1,154 @@
+#########################################################################
+# Prometheus scrape configuration
+# Every server runs node-exporter (:9100) and cAdvisor (:8180) on its LAN IP.
+# The "host" label is what the Grafana dashboards group by.
+# After editing: curl -X POST http://192.168.1.191:9090/-/reload
+#########################################################################
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+
+  # Host metrics (CPU, RAM, disks, network)
+  - job_name: node
+    static_configs:
+      - targets: ["192.168.1.190:9100"]
+        labels: { host: gateway }
+      - targets: ["192.168.1.191:9100"]
+        labels: { host: management }
+      - targets: ["192.168.1.192:9100"]
+        labels: { host: media }
+      - targets: ["192.168.1.193:9100"]
+        labels: { host: dev }
+      - targets: ["192.168.1.194:9100"]
+        labels: { host: cloud }
+
+  # Per-container metrics
+  - job_name: cadvisor
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["192.168.1.190:8180"]
+        labels: { host: gateway }
+      - targets: ["192.168.1.191:8180"]
+        labels: { host: management }
+      - targets: ["192.168.1.192:8180"]
+        labels: { host: media }
+      - targets: ["192.168.1.193:8180"]
+        labels: { host: dev }
+      - targets: ["192.168.1.194:8180"]
+        labels: { host: cloud }
+
+  # Reverse proxy: requests, status codes, latency per router/service
+  - job_name: traefik
+    static_configs:
+      - targets: ["192.168.1.190:8082"]
+        labels: { host: gateway }
+
+  # Security: active bans, alerts, parsed log lines
+  - job_name: crowdsec
+    static_configs:
+      - targets: ["192.168.1.190:6060"]
+        labels: { host: gateway }
+
+  - job_name: unpackerr
+    static_configs:
+      - targets: ["192.168.1.192:5656"]
+        labels: { host: media }
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels: { host: management }
+
+  - job_name: grafana
+    static_configs:
+      - targets: ["grafana:3000"]
+        labels: { host: management }
+
+  # HTTPS probes through Traefik: same URLs as homepage/services.yaml.
+  # Apps behind authentik-forwardauth are in "apps-direct": through Traefik they'd only prove Authentik is up.
+  # "host" is the server that runs the app
+  - job_name: apps
+    metrics_path: /probe
+    params:
+      module: [https_up]
+    static_configs:
+      - labels: { host: gateway }
+        targets:
+          - https://traefik.gateway.intranet.vflorio.com/dashboard/
+          - https://auth.gateway.intranet.vflorio.com
+      - labels: { host: management }
+        targets:
+          - https://grafana.management.intranet.vflorio.com
+          - https://portainer.management.intranet.vflorio.com
+          - https://guacamole.management.intranet.vflorio.com
+          - https://semaphore.management.intranet.vflorio.com
+          - https://vaultwarden.management.intranet.vflorio.com
+      - labels: { host: media }
+        targets:
+          - https://jellyfin.media.intranet.vflorio.com
+          - https://emby.media.intranet.vflorio.com
+          - https://navidrome.media.intranet.vflorio.com
+      - labels: { host: dev }
+        targets:
+          - https://coder.dev.intranet.vflorio.com
+          - https://git.dev.intranet.vflorio.com
+      - labels: { host: cloud }
+        targets:
+          - https://nextcloud.cloud.intranet.vflorio.com
+          - https://onlyoffice.cloud.intranet.vflorio.com
+          - https://immich.cloud.intranet.vflorio.com
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      # short name for the dashboard: https://sonarr.media.intranet... -> sonarr
+      - source_labels: [__param_target]
+        regex: https://([^.]+)\..*
+        target_label: app
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # Apps behind authentik-forwardauth, probed on their LAN port (PORT_* in each server's .env):
+  # Authentik answers 302 before the request reaches them, so the HTTPS probe can't see them go down
+  - job_name: apps-direct
+    metrics_path: /probe
+    params:
+      module: [http_up]
+    static_configs:
+      - labels: { host: management, app: home }
+        targets: ["http://192.168.1.191:3100"]
+      - labels: { host: management, app: prometheus }
+        targets: ["http://192.168.1.191:9090"]
+      - labels: { host: media, app: qbittorrent }
+        targets: ["http://192.168.1.192:8200"]
+      - labels: { host: media, app: sabnzbd }
+        targets: ["http://192.168.1.192:8100"]
+      - labels: { host: media, app: prowlarr }
+        targets: ["http://192.168.1.192:9696"]
+      - labels: { host: media, app: sonarr }
+        targets: ["http://192.168.1.192:8989"]
+      - labels: { host: media, app: radarr }
+        targets: ["http://192.168.1.192:7878"]
+      - labels: { host: media, app: lidarr }
+        targets: ["http://192.168.1.192:8686"]
+      - labels: { host: media, app: bazarr }
+        targets: ["http://192.168.1.192:6767"]
+      - labels: { host: media, app: flaresolverr }
+        targets: ["http://192.168.1.192:8191"]
+      - labels: { host: media, app: tdarr }
+        targets: ["http://192.168.1.192:8265"]
+      - labels: { host: dev, app: excalidraw }
+        targets: ["http://192.168.1.193:8043"]
+      - labels: { host: dev, app: drawio }
+        targets: ["http://192.168.1.193:8084"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115

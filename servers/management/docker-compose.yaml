@@ -18,6 +18,9 @@ volumes:
   # local disk on purpose: Postgres on NFS is unsafe (locking/corruption)
   postgresql-data:
     driver: local
+  # same reason: Prometheus' TSDB does not support NFS
+  prometheus-data:
+    driver: local
 
 services:
 
@@ -101,8 +104,14 @@ services:
       - management
     ports:
       - ${LOCAL_DOCKER_IP:?err}:${PORT_PROMETHEUS:?err}:9090  # traefik-kop routes to LOCAL_DOCKER_IP
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:?err}
+      - --web.enable-lifecycle  # reload after editing the config: curl -X POST http://192.168.1.191:9090/-/reload
     volumes:
-      - ${PATH_DATA:?err}/prometheus:/prometheus
+      - prometheus-data:/prometheus
+      - ./prometheus:/etc/prometheus:ro  # folder, not file: rsync replaces files, a file mount would keep the old one
     environment:
       - TZ=${TIMEZONE:?err}
     labels:
@@ -113,6 +122,21 @@ services:
       - traefik.http.routers.prometheus.middlewares=authentik-forwardauth@file
       - traefik.http.services.prometheus.loadbalancer.server.scheme=http
       - traefik.http.services.prometheus.loadbalancer.server.port=${PORT_PROMETHEUS:?err}
+
+  ###########################################################################
+  # Blackbox Exporter - HTTPS probes of every app through Traefik (up/down, latency, TLS expiry)
+  # Only reachable from Prometheus on the management network
+  ###########################################################################
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.29.1
+    container_name: blackbox-exporter
+    restart: unless-stopped
+    networks:
+      - management
+    command:
+      - --config.file=/etc/blackbox/blackbox.yml
+    volumes:
+      - ./prometheus:/etc/blackbox:ro  # folder mount, see prometheus
 
   ###########################################################################
   # Grafana - Visual Monitoring Dashboard
@@ -129,8 +153,11 @@ services:
     volumes:
       - /var/log:/var/dockerhost:ro
       - ${PATH_DATA:?err}/grafana:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro  # Prometheus datasource + dashboards
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
     environment:
       - TZ=${TIMEZONE:?err}
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/dashboards/homelab.json
       - GF_SERVER_ROOT_URL=https://grafana.${INTRANET_DOMAIN:?err}
       # Login via Authentik (provider in servers/gateway/authentik/blueprints/management-oidc.yaml)
       - GF_AUTH_GENERIC_OAUTH_ENABLED=true
@@ -349,5 +376,49 @@ services:
       - "REDIS_ADDR=${INTRANET_GATEWAY_IP:?err}:${PORT_VALKEY:?err}"
       - "REDIS_DB=${VALKEY_TRAEFIK_KOP:?err}"
       - "BIND_IP=${LOCAL_DOCKER_IP:?err}"
+    networks:
+      - management
+
+  ###########################################################################
+  # Node Exporter - Host Metrics (CPU, RAM, disks, network), scraped by Prometheus on management
+  # Host network so interface counters are the VM's, not the container's
+  ###########################################################################
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    container_name: node-exporter
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --web.listen-address=${LOCAL_DOCKER_IP:?err}:${PORT_NODE_EXPORTER:?err}
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|run|sys|var/lib/docker/.+)($$|/)
+    volumes:
+      - /:/host:ro,rslave  # rslave: NFS shares mounted after start show up too
+
+  ###########################################################################
+  # cAdvisor - Per-container Metrics, scraped by Prometheus on management
+  ###########################################################################
+  cadvisor:
+    image: ghcr.io/google/cadvisor:v0.60.6
+    container_name: cadvisor
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kmsg
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=30s
+      - --store_container_labels=false
+      - --whitelisted_container_labels=com.docker.compose.project,com.docker.compose.service
+      - --disable_metrics=advtcp,cpu_topology,cpuset,hugetlb,memory_numa,percpu,process,referenced_memory,resctrl,sched,tcp,udp
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_CADVISOR:?err}:8080
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
     networks:
       - management

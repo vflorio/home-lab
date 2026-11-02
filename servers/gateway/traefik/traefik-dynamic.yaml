@@ -132,3 +132,12 @@ http:
             - 100.64.0.0/10
             - fd7a:115c:a1e0::/48
             - 172.28.10.1/32
+
+  routers:
+    # metrics.manualRouting in traefik.yaml: /metrics only answers through this router.
+    # The metrics entrypoint is published on the LAN IP only and scraped by Prometheus on management
+    metrics:
+      entryPoints:
+        - metrics
+      rule: PathPrefix(`/metrics`)
+      service: prometheus@internal

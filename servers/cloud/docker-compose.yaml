@@ -226,3 +226,47 @@ services:
       - "BIND_IP=${LOCAL_DOCKER_IP:?err}"
     networks:
       - cloud
+
+  ###########################################################################
+  # Node Exporter - Host Metrics (CPU, RAM, disks, network), scraped by Prometheus on management
+  # Host network so interface counters are the VM's, not the container's
+  ###########################################################################
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    container_name: node-exporter
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --web.listen-address=${LOCAL_DOCKER_IP:?err}:${PORT_NODE_EXPORTER:?err}
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|run|sys|var/lib/docker/.+)($$|/)
+    volumes:
+      - /:/host:ro,rslave  # rslave: NFS shares mounted after start show up too
+
+  ###########################################################################
+  # cAdvisor - Per-container Metrics, scraped by Prometheus on management
+  ###########################################################################
+  cadvisor:
+    image: ghcr.io/google/cadvisor:v0.60.6
+    container_name: cadvisor
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kmsg
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=30s
+      - --store_container_labels=false
+      - --whitelisted_container_labels=com.docker.compose.project,com.docker.compose.service
+      - --disable_metrics=advtcp,cpu_topology,cpuset,hugetlb,memory_numa,percpu,process,referenced_memory,resctrl,sched,tcp,udp
+    ports:
+      - ${LOCAL_DOCKER_IP:?err}:${PORT_CADVISOR:?err}:8080
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - cloud

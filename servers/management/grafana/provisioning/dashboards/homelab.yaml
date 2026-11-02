@@ -1,0 +1,11 @@
+# Dashboards are files in servers/management/grafana/dashboards: edit them there (or in the UI,
+# then Share > Export > JSON and overwrite the file). UI saves are not allowed so the repo stays the source
+apiVersion: 1
+
+providers:
+  - name: homelab
+    folder: Homelab
+    type: file
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/dashboards

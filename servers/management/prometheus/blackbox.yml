@@ -1,0 +1,27 @@
+#########################################################################
+# Blackbox Exporter modules (servers/management/prometheus/prometheus.yml, jobs "apps" and "apps-direct")
+#########################################################################
+
+modules:
+  # "Up" = Traefik answers and the backend replies. Apps behind authentik-forwardauth
+  # answer with a redirect to the login page, so 3xx/401 count as up; 404 (no router)
+  # and 502/504 (backend down) don't
+  https_up:
+    prober: http
+    timeout: 10s
+    http:
+      method: GET
+      follow_redirects: false
+      fail_if_not_ssl: true
+      preferred_ip_protocol: ip4
+      valid_status_codes: [200, 204, 301, 302, 303, 307, 308, 401]
+
+  # Same rules, plain HTTP on the app's LAN port (apps behind authentik-forwardauth)
+  http_up:
+    prober: http
+    timeout: 10s
+    http:
+      method: GET
+      follow_redirects: false
+      preferred_ip_protocol: ip4
+      valid_status_codes: [200, 204, 301, 302, 303, 307, 308, 401]

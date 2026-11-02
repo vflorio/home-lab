@@ -59,3 +59,38 @@ Nella pagina di login: "Usa il single sign-on" (l'identificativo dell'organizzaz
 qualsiasi cosa). Al primo accesso l'account esistente con la stessa email viene collegato
 (`SSO_SIGNUPS_MATCH_EMAIL`). La master password serve comunque per sbloccare la cassaforte.
 I nuovi utenti si invitano sempre da `/admin`.
+
+## Monitoring (Prometheus + Grafana)
+
+Ogni server esegue due exporter, sul suo IP LAN:
+
+- `node-exporter` (:9100): CPU, RAM, dischi, rete, share NFS della VM
+- `cadvisor` (:8180): CPU, RAM e rete di ogni container
+
+Prometheus (`prometheus/prometheus.yml`) li raccoglie insieme alle metriche di Traefik (:8082),
+CrowdSec (:6060) e Unpackerr (:5656), e con `blackbox-exporter` (`prometheus/blackbox.yml`) apre ogni
+app via HTTPS come farebbe il browser (up/down, tempo di risposta, scadenza del certificato).
+Il database di Prometheus sta su un volume locale (`prometheus-data`), non su NFS: 30 giorni di storico
+(`PROMETHEUS_RETENTION`).
+
+Grafana carica da solo il datasource e la dashboard **Homelab** (`grafana/dashboards/homelab.json`),
+che è anche la home page. Dalla UI non si può salvare sopra: per modificarla, Save as... una copia,
+oppure modifica e poi Export > JSON e sovrascrivi il file nel repo.
+
+```bash
+# 1. Su tutti i server: aggiungi PORT_NODE_EXPORTER e PORT_CADVISOR al .env, poi
+docker compose up -d node-exporter cadvisor
+
+# 2. Gateway: Traefik deve servire /metrics (router "metrics" in traefik-dynamic.yaml, ricaricato da solo)
+curl -s http://192.168.1.190:8082/metrics | head
+
+# 3. Management: aggiungi PROMETHEUS_RETENTION al .env, poi
+docker compose up -d prometheus blackbox-exporter grafana
+```
+
+Controllo: Prometheus > Status > Target health, tutti i target devono essere UP
+(anche nella dashboard, sezione "Stack di monitoring").
+
+Nuova app: aggiungi l'URL al job `apps` di `prometheus/prometheus.yml` (se il router ha
+`authentik-forwardauth`, invece, IP:porta al job `apps-direct`: via Traefik risponderebbe Authentik
+al posto dell'app), poi `curl -X POST http://192.168.1.191:9090/-/reload`.
