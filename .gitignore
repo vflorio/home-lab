@@ -17,3 +17,4 @@ dns/bind9/config/*.bak-*
 *.tfvars
 *.pkrvars.hcl
 ansible/logs
+coder-external-auth.env

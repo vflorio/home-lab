@@ -74,7 +74,19 @@ services:
       - CODER_ACCESS_URL=https://coder.${INTRANET_DOMAIN:?err}
       - CODER_WILDCARD_ACCESS_URL=*.coder.${INTRANET_DOMAIN:?err}
       - CODER_PG_CONNECTION_URL=postgres://${POSTGRES_USER:?err}:${POSTGRES_PASSWORD:?err}@postgres:5432/${CODER_DATABASE:?err}?sslmode=disable
+      # Login via Authentik (provider in servers/gateway/authentik/blueprints/dev-oidc.yaml)
+      - CODER_OIDC_ISSUER_URL=https://auth.${GATEWAY_INTRANET_DOMAIN:?err}/application/o/coder/
+      - CODER_OIDC_CLIENT_ID=coder
+      - CODER_OIDC_CLIENT_SECRET=${CODER_OIDC_CLIENT_SECRET:?err}
+      - CODER_OIDC_SIGN_IN_TEXT=Accedi con Authentik
+      - CODER_OIDC_ICON_URL=https://auth.${GATEWAY_INTRANET_DOMAIN:?err}/static/dist/assets/icons/icon.svg
+      - CODER_OIDC_IGNORE_EMAIL_VERIFIED=true  # Authentik does not always send email_verified
+      - CODER_OAUTH2_GITHUB_DEFAULT_PROVIDER_ENABLE=false  # hide the built-in "Login with GitHub"
       - TZ=${TIMEZONE:?err}
+    env_file:
+      # Gitea external auth: needs an OAuth app created in Gitea first, so it is optional (see README)
+      - path: ./coder-external-auth.env
+        required: false
     depends_on:
       - postgres
     labels:
@@ -82,7 +94,7 @@ services:
       - traefik.http.routers.coder.service=coder
       - traefik.http.routers.coder.entrypoints=websecure
       - traefik.http.routers.coder.rule=Host(`coder.${INTRANET_DOMAIN:?err}`) || HostRegexp(`^[a-zA-Z0-9-]+\.coder\.${INTRANET_DOMAIN:?err}$$`)
-      - traefik.http.routers.coder.middlewares=authentik-forwardauth@file
+      # no authentik-forwardauth: workspace agents and the CLI can't pass it, Coder logs in via OIDC
       - traefik.http.services.coder.loadbalancer.server.scheme=http
       - traefik.http.services.coder.loadbalancer.server.port=${PORT_CODER:?err}
     networks:
@@ -129,6 +141,15 @@ services:
       - GITEA__server__SSH_DOMAIN=${INTRANET_DOMAIN:?err}  # ssh goes straight to the dev VM, not through Traefik
       - GITEA__server__SSH_PORT=${PORT_GITEA_SSH:?err}
       - GITEA__server__ROOT_URL=https://git.${INTRANET_DOMAIN:?err}/
+      # Accounts come from Authentik (auth source created once via CLI, see README)
+      - GITEA__service__DISABLE_REGISTRATION=false
+      - GITEA__service__ALLOW_ONLY_EXTERNAL_REGISTRATION=true
+      - GITEA__service__SHOW_REGISTRATION_BUTTON=false
+      - GITEA__openid__ENABLE_OPENID_SIGNIN=false
+      - GITEA__openid__ENABLE_OPENID_SIGNUP=false
+      - GITEA__oauth2_client__ENABLE_AUTO_REGISTRATION=true
+      - GITEA__oauth2_client__USERNAME=nickname  # Authentik username
+      - GITEA__oauth2_client__ACCOUNT_LINKING=auto  # same email links to the existing local account
     depends_on:
       - postgres
     labels:
@@ -136,7 +157,7 @@ services:
       - traefik.http.routers.gitea.service=gitea
       - traefik.http.routers.gitea.entrypoints=websecure
       - traefik.http.routers.gitea.rule=Host(`git.${INTRANET_DOMAIN:?err}`)
-      - traefik.http.routers.gitea.middlewares=authentik-forwardauth@file
+      # no authentik-forwardauth: git over https and Coder's OAuth calls can't pass it, Gitea logs in via OIDC
       - traefik.http.services.gitea.loadbalancer.server.scheme=http
       - traefik.http.services.gitea.loadbalancer.server.port=${PORT_GITEA:?err}
     networks:

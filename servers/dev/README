@@ -1,15 +1,61 @@
-## Configurazione Iniziale Coder
+## Configurazione Iniziale
+
+Coder e Gitea fanno login via Authentik (OIDC), non con il forward auth di Traefik.
+I provider sono in `servers/gateway/authentik/blueprints/dev-oidc.yaml`: i segreti
+`CODER_OIDC_CLIENT_SECRET` e `GITEA_OIDC_CLIENT_SECRET` devono essere uguali in
+`servers/gateway/.env` e `servers/dev/.env`.
 
 ```bash
+# 0. Gateway: ricrea Authentik per caricare le nuove variabili e il blueprint
+#    (Authentik > Applications deve mostrare Coder e Gitea)
+cd servers/gateway && docker compose up -d authentik authentic-worker
+
+# 1. Dev
 chmod +x ./update-docker-group.sh
-
 ./update-docker-group.sh
+docker compose up -d
+```
 
-# Crea il primo admin user
-docker exec -it coder coder login
+### Coder
+
+```bash
+# Crea il primo admin (login con password, resta come accesso di emergenza)
+docker exec -it coder coder login https://coder.dev.intranet.vflorio.com
+
+# Poi accedi dal browser con "Accedi con Authentik" e promuovi il tuo utente
+docker exec -it coder coder users edit-roles <utente-authentik> --roles owner
 
 # Carica il template
-docker exec -it coder coder templates push --directory /templates/docker
-docker exec -it coder coder templates push --directory /templates/homelab-dev
-
+docker exec -it coder coder templates push homelab --directory /templates/homelab --yes
+docker exec -it coder coder templates edit homelab --default-ttl 4h --activity-bump 1h --yes
 ```
+
+### Gitea
+
+```bash
+# Se al primo accesso compare il wizard di installazione, completalo creando un admin
+# con lo stesso username/email dell'utente Authentik: al primo login via Authentik
+# l'account viene collegato in automatico (ACCOUNT_LINKING=auto)
+
+# Aggiungi Authentik come sorgente di login (una volta sola)
+. ./.env
+docker exec -u git gitea gitea admin auth add-oauth \
+  --name authentik \
+  --provider openidConnect \
+  --key gitea \
+  --secret "$GITEA_OIDC_CLIENT_SECRET" \
+  --auto-discover-url "https://auth.$GATEWAY_INTRANET_DOMAIN/application/o/gitea/.well-known/openid-configuration" \
+  --scopes "openid email profile" \
+  --skip-local-2fa
+```
+
+### Coder <-> Gitea (external auth)
+
+Permette ai workspace di fare clone/push su Gitea con il token dell'utente, senza copiare chiavi SSH.
+
+1. Gitea > Impostazioni sito (admin) > Applicazioni > Crea applicazione OAuth2
+   - Nome: `Coder`
+   - Redirect URI: `https://coder.dev.intranet.vflorio.com/external-auth/gitea/callback`
+2. `cp coder-external-auth.env.example coder-external-auth.env` e incolla Client ID e Secret
+3. `docker compose up -d coder`
+4. Coder > Account > External Authentication > Gitea > Login

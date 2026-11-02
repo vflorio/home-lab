@@ -93,6 +93,9 @@ services:
       - AUTHENTIK_EMAIL__FROM=${EMAIL_SENDER}
       - AUTHENTIK_EMAIL__TIMEOUT=10
       - INTRANET_DOMAIN=${INTRANET_DOMAIN:?err}  # used by the homelab blueprint
+      - DEV_INTRANET_DOMAIN=${DEV_INTRANET_DOMAIN:?err}  # used by the dev-oidc blueprint
+      - CODER_OIDC_CLIENT_SECRET=${CODER_OIDC_CLIENT_SECRET:?err}
+      - GITEA_OIDC_CLIENT_SECRET=${GITEA_OIDC_CLIENT_SECRET:?err}
     volumes:
       - ${PATH_DATA:?err}/authentik/media:/media
       - ${PATH_DATA:?err}/authentik/templates:/templates
@@ -133,6 +136,9 @@ services:
       - AUTHENTIK_POSTGRESQL__PASSWORD=${POSTGRES_PASSWORD:?err}
       - AUTHENTIK_ERROR_REPORTING__ENABLED=${AUTHENTIK_ERROR_REPORTING__ENABLED:?err}
       - INTRANET_DOMAIN=${INTRANET_DOMAIN:?err}  # used by the homelab blueprint
+      - DEV_INTRANET_DOMAIN=${DEV_INTRANET_DOMAIN:?err}  # used by the dev-oidc blueprint
+      - CODER_OIDC_CLIENT_SECRET=${CODER_OIDC_CLIENT_SECRET:?err}
+      - GITEA_OIDC_CLIENT_SECRET=${GITEA_OIDC_CLIENT_SECRET:?err}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${PATH_DATA:?err}/authentik/certs:/certs
