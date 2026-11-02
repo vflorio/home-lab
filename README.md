@@ -32,7 +32,7 @@ Single Proxmox VE node (**silicon**) hosting infrastructure VMs (DNS, NAS, firew
 
 - No port forwards and no public app records.
 - Remote access via **Tailscale** only: subnet router for 192.168.1.0/24 and split DNS `intranet.vflorio.com` → 192.168.1.150.
-- All web UIs are served over HTTPS by Traefik, with CrowdSec on every router and Authentik on every router except apps whose native clients can't pass forward auth (Vaultwarden, Navidrome: own login).
+- All web UIs are served over HTTPS by Traefik, with CrowdSec on every router and Authentik on every router: forward auth for apps without their own login, OIDC for apps that have one (Coder, Gitea, Grafana, Portainer, Semaphore, Guacamole, Vaultwarden, Nextcloud, Immich). Navidrome keeps its own login because Subsonic clients can't pass forward auth.
 
 ## Physical devices
 
@@ -184,9 +184,7 @@ Indexers live in Prowlarr only (public ones, Cloudflare-protected via the `flare
 | App | Description | URL | Direct endpoint |
 |---|---|---|---|
 | Coder | Development environments | https://coder.dev.intranet.vflorio.com | 192.168.1.193:7080 |
-| Gitea | Git server | https://git.dev.intranet.vflorio.com | 192.168.1.193:3000, SSH 192.168.1.193:2222 |
-| Container Registry | Docker registry | https://container-registry.dev.intranet.vflorio.com | 192.168.1.193:5000 |
-| Verdaccio | npm registry | https://npm.dev.intranet.vflorio.com | 192.168.1.193:4873 |
+| Gitea | Git server, container + npm registry (Packages) | https://git.dev.intranet.vflorio.com | 192.168.1.193:3000, SSH 192.168.1.193:2222 |
 | Excalidraw | Quick sketches | https://excalidraw.dev.intranet.vflorio.com | 192.168.1.193:8043 |
 | Draw.io | Diagrams | https://drawio.dev.intranet.vflorio.com | 192.168.1.193:8084 |
 

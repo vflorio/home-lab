@@ -150,6 +150,8 @@ services:
       - GITEA__oauth2_client__ENABLE_AUTO_REGISTRATION=true
       - GITEA__oauth2_client__USERNAME=nickname  # Authentik username
       - GITEA__oauth2_client__ACCOUNT_LINKING=auto  # same email links to the existing local account
+      # Packages: container registry (git.<domain>/<owner>/<image>) and npm registry, replace registry + Verdaccio
+      - GITEA__packages__ENABLED=true
     depends_on:
       - postgres
     labels:
@@ -160,60 +162,6 @@ services:
       # no authentik-forwardauth: git over https and Coder's OAuth calls can't pass it, Gitea logs in via OIDC
       - traefik.http.services.gitea.loadbalancer.server.scheme=http
       - traefik.http.services.gitea.loadbalancer.server.port=${PORT_GITEA:?err}
-    networks:
-      - dev
-
-  ###########################################################################
-  # Container Registry - Docker Registry
-  ###########################################################################
-  registry:
-    image: "registry:2.8.3"
-    container_name: container-registry
-    restart: unless-stopped
-    ports:
-      - "${LOCAL_DOCKER_IP:?err}:${PORT_REGISTRY:?err}:5000"
-    volumes:
-      - ${PATH_DATA:?err}/container-registry:/var/lib/registry/docker
-    environment:
-      - REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY=/var/lib/registry
-      - REGISTRY_AUTH=htpasswd
-      - REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm
-      - REGISTRY_AUTH_HTPASSWD_PATH=/var/lib/registry/auth/htpasswd
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.registry.service=registry
-      - traefik.http.routers.registry.entrypoints=websecure
-      - traefik.http.routers.registry.rule=Host(`container-registry.${INTRANET_DOMAIN:?err}`)
-      - traefik.http.routers.registry.middlewares=authentik-forwardauth@file
-      - traefik.http.services.registry.loadbalancer.server.scheme=http
-      - traefik.http.services.registry.loadbalancer.server.port=${PORT_REGISTRY:?err}
-    networks:
-      - dev
-
-  ###########################################################################
-  # Verdaccio - NPM Registry
-  ###########################################################################
-  verdaccio:
-    image: "verdaccio/verdaccio:6.2.0"
-    container_name: verdaccio
-    restart: unless-stopped
-    ports:
-      - "${LOCAL_DOCKER_IP:?err}:${PORT_VERDACCIO:?err}:${PORT_VERDACCIO:?err}"
-    volumes:
-      - ${PATH_DATA:?err}/verdaccio/storage:/verdaccio/storage  # the image declares it as VOLUME: without this bind packages end up in an anonymous volume
-      - "./verdaccio:/verdaccio/conf"
-    environment:
-      - VERDACCIO_USER_NAME=${VERDACCIO_USER:?err}
-      - VERDACCIO_USER_PWD=${VERDACCIO_PASSWORD:?err}
-      - VERDACCIO_PORT=${PORT_VERDACCIO:?err}
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.verdaccio.service=verdaccio
-      - traefik.http.routers.verdaccio.entrypoints=websecure
-      - traefik.http.routers.verdaccio.rule=Host(`npm.${INTRANET_DOMAIN:?err}`)
-      - traefik.http.routers.verdaccio.middlewares=authentik-forwardauth@file
-      - traefik.http.services.verdaccio.loadbalancer.server.scheme=http
-      - traefik.http.services.verdaccio.loadbalancer.server.port=${PORT_VERDACCIO:?err}
     networks:
       - dev
 

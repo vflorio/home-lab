@@ -31,9 +31,7 @@
 - Flaresolverr (Cloudflare Bypass)
 
 (dev server)
-- Gitea (Git repository server)
-- Container Registry (Docker Registry)
-- Verdaccio (Private NPM Store)
+- Gitea (Git repository server, Container + NPM registry)
 - Coder (VS Code nel browser)
 - Excalidraw (Sketching)
 - Drawio (Sketching)

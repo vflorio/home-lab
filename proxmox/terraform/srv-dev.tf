@@ -49,7 +49,7 @@ resource "proxmox_vm_qemu" "srv-dev" {
                 disk {
                     format = "raw"
                     storage = "local-lvm"
-                    size = 24
+                    size = 64
                 }
             }
         }

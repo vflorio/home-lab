@@ -1,0 +1,61 @@
+## Login con Authentik (OIDC)
+
+Grafana, Portainer, Semaphore, Guacamole e Vaultwarden fanno login via Authentik (OIDC), non con
+il forward auth di Traefik. I provider sono in `servers/gateway/authentik/blueprints/management-oidc.yaml`:
+i segreti `*_OIDC_CLIENT_SECRET` devono essere uguali in `servers/gateway/.env` e
+`servers/management/.env` (quello di Portainer sta solo nel gateway, si incolla nella UI).
+
+```bash
+# 0. Gateway: ricrea Authentik per caricare le nuove variabili e il blueprint
+#    (Authentik > Applications deve mostrare Grafana, Portainer, Semaphore, Guacamole e Vaultwarden)
+cd servers/gateway && docker compose up -d authentik authentic-worker
+
+# 1. Management
+cd servers/management && docker compose up -d
+```
+
+Gli account locali (admin di Grafana, Portainer, Semaphore, `guacadmin`) restano come accesso
+di emergenza.
+
+### Grafana
+
+Nessun passaggio manuale. Il ruolo arriva dai gruppi Authentik: `authentik Admins` -> Admin,
+tutti gli altri -> Viewer. Il login locale resta su `/login?disableAutoLogin`.
+
+### Portainer
+
+Settings > Authentication > OAuth:
+
+- Use SSO: on, Automatic user provisioning: on (gli utenti nuovi sono "standard user")
+- Provider: Custom
+- Client ID: `portainer`
+- Client secret: `PORTAINER_OIDC_CLIENT_SECRET` di `servers/gateway/.env`
+- Authorization URL: `https://auth.gateway.intranet.vflorio.com/application/o/authorize/`
+- Access token URL: `https://auth.gateway.intranet.vflorio.com/application/o/token/`
+- Resource URL: `https://auth.gateway.intranet.vflorio.com/application/o/userinfo/`
+- Redirect URL: `https://portainer.management.intranet.vflorio.com/` (con lo slash finale)
+- Logout URL: `https://auth.gateway.intranet.vflorio.com/application/o/portainer/end-session/`
+- User identifier: `preferred_username`
+- Scopes: `email openid profile` (separati da spazi, non virgole)
+
+Poi accedi con Authentik e, dall'admin locale, promuovi il tuo utente: Users > utente > Administrator.
+
+### Semaphore
+
+Accedi con "Accedi con Authentik", poi dall'admin locale: Users > utente > Admin.
+
+### Guacamole
+
+Gli utenti Authentik vengono creati nel DB al primo login (`POSTGRESQL_AUTO_CREATE_ACCOUNTS`),
+senza permessi. Due modi per darglieli, da `guacadmin`:
+
+- per utente: Settings > Users > utente > permessi e connessioni
+- per gruppo: Settings > Groups > crea un gruppo con lo stesso nome di un gruppo Authentik
+  (es. `authentik Admins`) e assegna lì permessi e connessioni; arriva col claim `groups`
+
+### Vaultwarden
+
+Nella pagina di login: "Usa il single sign-on" (l'identificativo dell'organizzazione è ignorato, metti
+qualsiasi cosa). Al primo accesso l'account esistente con la stessa email viene collegato
+(`SSO_SIGNUPS_MATCH_EMAIL`). La master password serve comunque per sbloccare la cassaforte.
+I nuovi utenti si invitano sempre da `/admin`.

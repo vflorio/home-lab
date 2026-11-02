@@ -1,0 +1,82 @@
+# yaml-language-server: $schema=https://goauthentik.io/blueprints/schema.json
+#
+# OIDC providers for the cloud server apps (Nextcloud, Immich). They must NOT sit behind
+# authentik-forwardauth@file: the desktop/mobile clients and WebDAV call them without a
+# browser session and would get redirected to the login
+#
+# CLOUD_INTRANET_DOMAIN and the client secrets come from the compose environment, the
+# secrets must match servers/cloud/.env (Nextcloud) and the Immich admin UI
+
+version: 1
+metadata:
+  name: Homelab - cloud OIDC
+  labels:
+    blueprints.goauthentik.io/description: "OIDC providers for Nextcloud and Immich"
+
+entries:
+  ###########################################################################
+  # Nextcloud - user_oidc app, provider created with occ (see servers/cloud/README)
+  ###########################################################################
+  - model: authentik_providers_oauth2.oauth2provider
+    id: nextcloud-provider
+    identifiers:
+      name: Nextcloud
+    attrs:
+      client_type: confidential
+      client_id: nextcloud
+      client_secret: !Env NEXTCLOUD_OIDC_CLIENT_SECRET
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+      redirect_uris:
+        # with and without index.php: depends on whether pretty URLs are enabled
+        - matching_mode: strict
+          url: !Format ["https://nextcloud.%s/apps/user_oidc/code", !Env CLOUD_INTRANET_DOMAIN]
+        - matching_mode: strict
+          url: !Format ["https://nextcloud.%s/index.php/apps/user_oidc/code", !Env CLOUD_INTRANET_DOMAIN]
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+
+  - model: authentik_core.application
+    identifiers:
+      slug: nextcloud
+    attrs:
+      name: Nextcloud
+      provider: !KeyOf nextcloud-provider
+      meta_launch_url: !Format ["https://nextcloud.%s", !Env CLOUD_INTRANET_DOMAIN]
+
+  ###########################################################################
+  # Immich - OAuth is set in its admin UI, see servers/cloud/README
+  ###########################################################################
+  - model: authentik_providers_oauth2.oauth2provider
+    id: immich-provider
+    identifiers:
+      name: Immich
+    attrs:
+      client_type: confidential
+      client_id: immich
+      client_secret: !Env IMMICH_OIDC_CLIENT_SECRET
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+      redirect_uris:
+        - matching_mode: strict
+          url: app.immich:///oauth-callback  # mobile app
+        - matching_mode: strict
+          url: !Format ["https://immich.%s/auth/login", !Env CLOUD_INTRANET_DOMAIN]
+        - matching_mode: strict
+          url: !Format ["https://immich.%s/user-settings", !Env CLOUD_INTRANET_DOMAIN]
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+
+  - model: authentik_core.application
+    identifiers:
+      slug: immich
+    attrs:
+      name: Immich
+      provider: !KeyOf immich-provider
+      meta_launch_url: !Format ["https://immich.%s/auth/login?autoLaunch=1", !Env CLOUD_INTRANET_DOMAIN]

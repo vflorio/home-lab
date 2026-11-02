@@ -46,12 +46,22 @@ services:
       - POSTGRESQL_DATABASE=${GUACAMOLE_DATABASE:?err}
       - POSTGRESQL_USER=${POSTGRES_USER:?err}
       - POSTGRESQL_PASSWORD=${POSTGRES_PASSWORD:?err}
+      - POSTGRESQL_AUTO_CREATE_ACCOUNTS=true  # Authentik users get a DB entry, so permissions can be granted to them
+      # Login via Authentik (provider in servers/gateway/authentik/blueprints/management-oidc.yaml)
+      - OPENID_ENABLED=true
+      - OPENID_AUTHORIZATION_ENDPOINT=https://auth.${GATEWAY_INTRANET_DOMAIN:?err}/application/o/authorize/
+      - OPENID_JWKS_ENDPOINT=https://auth.${GATEWAY_INTRANET_DOMAIN:?err}/application/o/guacamole/jwks/
+      - OPENID_ISSUER=https://auth.${GATEWAY_INTRANET_DOMAIN:?err}/application/o/guacamole/
+      - OPENID_CLIENT_ID=guacamole
+      - OPENID_REDIRECT_URI=https://guacamole.${INTRANET_DOMAIN:?err}/
+      - OPENID_USERNAME_CLAIM_TYPE=preferred_username  # Authentik username, not the email
+      - EXTENSION_PRIORITY=*, openid  # keep the local login form (guacadmin) with an SSO link
     labels:
       - traefik.enable=true
       - traefik.http.routers.guacamole.service=guacamole
-      - traefik.http.routers.guacamole.rule=Host(`guacamole.${INTRANET_DOMAIN:?err}`)  
+      - traefik.http.routers.guacamole.rule=Host(`guacamole.${INTRANET_DOMAIN:?err}`)
       - traefik.http.routers.guacamole.entrypoints=websecure
-      - traefik.http.routers.guacamole.middlewares=authentik-forwardauth@file
+      # no authentik-forwardauth: Guacamole logs in via OIDC
       - traefik.http.services.guacamole.loadbalancer.server.scheme=http
       - traefik.http.services.guacamole.loadbalancer.server.port=${PORT_GUACAMOLE:?err}
 
@@ -121,12 +131,26 @@ services:
       - ${PATH_DATA:?err}/grafana:/var/lib/grafana
     environment:
       - TZ=${TIMEZONE:?err}
+      - GF_SERVER_ROOT_URL=https://grafana.${INTRANET_DOMAIN:?err}
+      # Login via Authentik (provider in servers/gateway/authentik/blueprints/management-oidc.yaml)
+      - GF_AUTH_GENERIC_OAUTH_ENABLED=true
+      - GF_AUTH_GENERIC_OAUTH_NAME=Authentik
+      - GF_AUTH_GENERIC_OAUTH_CLIENT_ID=grafana
+      - GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET=${GRAFANA_OIDC_CLIENT_SECRET:?err}
+      - GF_AUTH_GENERIC_OAUTH_SCOPES=openid profile email
+      - GF_AUTH_GENERIC_OAUTH_AUTH_URL=https://auth.${GATEWAY_INTRANET_DOMAIN:?err}/application/o/authorize/
+      - GF_AUTH_GENERIC_OAUTH_TOKEN_URL=https://auth.${GATEWAY_INTRANET_DOMAIN:?err}/application/o/token/
+      - GF_AUTH_GENERIC_OAUTH_API_URL=https://auth.${GATEWAY_INTRANET_DOMAIN:?err}/application/o/userinfo/
+      - GF_AUTH_GENERIC_OAUTH_LOGIN_ATTRIBUTE_PATH=preferred_username
+      - GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH=contains(groups, 'authentik Admins') && 'Admin' || 'Viewer'
+      - GF_AUTH_SIGNOUT_REDIRECT_URL=https://auth.${GATEWAY_INTRANET_DOMAIN:?err}/application/o/grafana/end-session/
+      - GF_AUTH_OAUTH_AUTO_LOGIN=true  # local admin still works from /login?disableAutoLogin
     labels:
       - traefik.enable=true
       - traefik.http.routers.grafana.service=grafana
       - traefik.http.routers.grafana.rule=Host(`grafana.${INTRANET_DOMAIN:?err}`)
       - traefik.http.routers.grafana.entrypoints=websecure
-      - traefik.http.routers.grafana.middlewares=authentik-forwardauth@file
+      # no authentik-forwardauth: Grafana logs in via OIDC
       - traefik.http.services.grafana.loadbalancer.server.scheme=http 
       - traefik.http.services.grafana.loadbalancer.server.port=${PORT_GRAFANA:?err}
 
@@ -149,7 +173,7 @@ services:
       - traefik.http.routers.portainer.service=portainer
       - traefik.http.routers.portainer.rule=Host(`portainer.${INTRANET_DOMAIN:?err}`)
       - traefik.http.routers.portainer.entrypoints=websecure
-      - traefik.http.routers.portainer.middlewares=authentik-forwardauth@file
+      # no authentik-forwardauth: Portainer logs in via OIDC (configured in its UI, see README)
       - traefik.http.services.portainer.loadbalancer.server.scheme=http
       - traefik.http.services.portainer.loadbalancer.server.port=${PORT_PORTAINER:?err}
   
@@ -230,12 +254,15 @@ services:
       # Features
       - SEMAPHORE_LDAP_ENABLE=false
       - SEMAPHORE_DEMO_MODE=false
+      # Login via Authentik (provider in servers/gateway/authentik/blueprints/management-oidc.yaml).
+      # The "authentik" key is part of the redirect URL registered in the provider
+      - 'SEMAPHORE_OIDC_PROVIDERS={"authentik": {"display_name": "Accedi con Authentik", "provider_url": "https://auth.${GATEWAY_INTRANET_DOMAIN:?err}/application/o/semaphore/", "client_id": "semaphore", "client_secret": "${SEMAPHORE_OIDC_CLIENT_SECRET:?err}", "redirect_url": "https://semaphore.${INTRANET_DOMAIN:?err}/api/auth/oidc/authentik/redirect/", "scopes": ["openid", "profile", "email"], "username_claim": "preferred_username", "name_claim": "name", "email_claim": "email"}}'
     labels:
       - traefik.enable=true
       - traefik.http.routers.semaphore.service=semaphore
       - traefik.http.routers.semaphore.rule=Host(`semaphore.${INTRANET_DOMAIN:?err}`)
       - traefik.http.routers.semaphore.entrypoints=websecure
-      - traefik.http.routers.semaphore.middlewares=authentik-forwardauth@file
+      # no authentik-forwardauth: Semaphore logs in via OIDC
       - traefik.http.services.semaphore.loadbalancer.server.scheme=http
       - traefik.http.services.semaphore.loadbalancer.server.port=${PORT_SEMAPHORE:?err}
 
@@ -264,6 +291,16 @@ services:
       - SIGNUPS_ALLOWED=false  # new accounts only via invite from /admin
       - INVITATIONS_ALLOWED=true
       - SHOW_PASSWORD_HINT=false
+      # SSO via Authentik (provider in servers/gateway/authentik/blueprints/management-oidc.yaml).
+      # It replaces the email+password step only: the vault is still unlocked with the master password
+      - SSO_ENABLED=true
+      - SSO_ONLY=false  # password login stays as fallback (and for clients without SSO)
+      - SSO_AUTHORITY=https://auth.${GATEWAY_INTRANET_DOMAIN:?err}/application/o/vaultwarden/
+      - SSO_CLIENT_ID=vaultwarden
+      - SSO_CLIENT_SECRET=${VAULTWARDEN_OIDC_CLIENT_SECRET:?err}
+      - SSO_SCOPES=email profile offline_access
+      - SSO_SIGNUPS_MATCH_EMAIL=true  # first SSO login links the existing account with the same email
+      - SSO_CLIENT_CACHE_EXPIRATION=0
     labels:
       # no authentik-forwardauth: Bitwarden apps/extensions can't pass it, Vaultwarden has its own login
       - traefik.enable=true

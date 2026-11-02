@@ -45,7 +45,7 @@ services:
       - traefik.http.routers.nextcloud.service=nextcloud
       - traefik.http.routers.nextcloud.entrypoints=websecure
       - traefik.http.routers.nextcloud.rule=Host(`nextcloud.${INTRANET_DOMAIN:?err}`)
-      - traefik.http.routers.nextcloud.middlewares=authentik-forwardauth@file
+      # no authentik-forwardauth: desktop/mobile clients and WebDAV can't pass it, Nextcloud logs in via OIDC (user_oidc, see README)
       - traefik.http.services.nextcloud.loadbalancer.server.scheme=http
       - traefik.http.services.nextcloud.loadbalancer.server.port=${PORT_NEXTCLOUD:?err}
     networks:
@@ -110,7 +110,7 @@ services:
       - traefik.http.routers.onlyoffice.service=onlyoffice
       - traefik.http.routers.onlyoffice.entrypoints=websecure
       - traefik.http.routers.onlyoffice.rule=Host(`onlyoffice.${INTRANET_DOMAIN:?err}`)
-      - traefik.http.routers.onlyoffice.middlewares=authentik-forwardauth@file
+      # no authentik-forwardauth: Nextcloud calls it server-to-server without a session, JWT_SECRET protects it
       - traefik.http.services.onlyoffice.loadbalancer.server.scheme=http
       - traefik.http.services.onlyoffice.loadbalancer.server.port=${PORT_ONLYOFFICE:?err}
     networks:
@@ -146,7 +146,7 @@ services:
       - traefik.http.routers.immich.service=immich
       - traefik.http.routers.immich.entrypoints=websecure
       - traefik.http.routers.immich.rule=Host(`immich.${INTRANET_DOMAIN:?err}`)
-      - traefik.http.routers.immich.middlewares=authentik-forwardauth@file
+      # no authentik-forwardauth: the mobile app can't pass it, Immich logs in via OIDC (configured in its UI, see README)
       - traefik.http.services.immich.loadbalancer.server.scheme=http
       - traefik.http.services.immich.loadbalancer.server.port=${PORT_IMMICH:?err}
     healthcheck:

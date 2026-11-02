@@ -1,0 +1,51 @@
+## Login con Authentik (OIDC)
+
+Nextcloud e Immich fanno login via Authentik (OIDC), non con il forward auth di Traefik: i client
+desktop/mobile e WebDAV non potrebbero passarlo. I provider sono in
+`servers/gateway/authentik/blueprints/cloud-oidc.yaml`: `NEXTCLOUD_OIDC_CLIENT_SECRET` deve essere
+uguale in `servers/gateway/.env` e `servers/cloud/.env`, `IMMICH_OIDC_CLIENT_SECRET` sta solo nel
+gateway e si incolla nella UI di Immich.
+
+OnlyOffice non ha utenti: lo protegge `JWT_SECRET`, condiviso con l'app ONLYOFFICE di Nextcloud.
+
+```bash
+# 0. Gateway: ricrea Authentik per caricare le nuove variabili e il blueprint
+#    (Authentik > Applications deve mostrare Nextcloud e Immich)
+cd servers/gateway && docker compose up -d authentik authentic-worker
+
+# 1. Cloud
+cd servers/cloud && docker compose up -d
+```
+
+### Nextcloud
+
+```bash
+chmod +x ./setup-nextcloud-oidc.sh
+./setup-nextcloud-oidc.sh
+```
+
+Al primo login con Authentik l'account locale con lo stesso username (es. l'admin) viene riusato.
+I client desktop/mobile si collegano dal browser (login flow), quindi passano anch'essi da Authentik.
+
+Per mandare tutti direttamente su Authentik (il login locale resta su `/login?direct=1`):
+
+```bash
+docker exec -u www-data nextcloud php occ config:app:set --type=string --value=0 user_oidc allow_multiple_user_backends
+```
+
+### Immich
+
+Amministrazione > Impostazioni > Autenticazione OAuth:
+
+- Abilita: on
+- Issuer URL: `https://auth.gateway.intranet.vflorio.com/application/o/immich/`
+- Client ID: `immich`
+- Client secret: `IMMICH_OIDC_CLIENT_SECRET` di `servers/gateway/.env`
+- Scope: `openid email profile`
+- Storage label claim: `preferred_username`
+- Testo del pulsante: `Accedi con Authentik`
+- Registrazione automatica: on
+- Override redirect URI mobile: off (`app.immich:///oauth-callback` è già registrato nel provider)
+
+Gli utenti esistenti vengono collegati per email. Il login con password resta attivo finché non
+disattivi "Login con password" nella stessa pagina.

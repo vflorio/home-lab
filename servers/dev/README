@@ -59,3 +59,24 @@ Permette ai workspace di fare clone/push su Gitea con il token dell'utente, senz
 2. `cp coder-external-auth.env.example coder-external-auth.env` e incolla Client ID e Secret
 3. `docker compose up -d coder`
 4. Coder > Account > External Authentication > Gitea > Login
+
+### Gitea Packages (container + npm registry)
+
+Sostituiscono il vecchio Docker Registry e Verdaccio. Gli utenti Authentik non hanno una password
+Gitea, quindi CLI e CI usano un token: Gitea > Impostazioni > Applicazioni > Genera token
+(scope `package:write`, più `repository:read` per i pacchetti legati a un repo).
+
+```bash
+# Container registry: le immagini sono git.dev.intranet.vflorio.com/<utente o org>/<immagine>
+docker login git.dev.intranet.vflorio.com -u <utente> -p <token>
+docker push git.dev.intranet.vflorio.com/<utente>/<immagine>:<tag>
+
+# npm (per org/utente, scope consigliato)
+npm config set @<scope>:registry https://git.dev.intranet.vflorio.com/api/packages/<utente o org>/npm/
+npm config set -- '//git.dev.intranet.vflorio.com/api/packages/<utente o org>/npm/:_authToken' "<token>"
+npm publish
+```
+
+I dati dei vecchi servizi (`$PATH_DATA/container-registry`, `$PATH_DATA/verdaccio`) non vengono
+cancellati: dopo aver ripubblicato su Gitea quello che serve, rimuovi i container con
+`docker compose up -d --remove-orphans` e poi le cartelle a mano.

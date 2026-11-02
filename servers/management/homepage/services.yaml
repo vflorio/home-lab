@@ -230,7 +230,7 @@
     - srv-dev:
         icon: mdi-code-braces-box
         ping: 192.168.1.193
-        description: "VM 3400 · 8 vCPU · 16 GB · sviluppo, registry │ 🔒 dev.intranet.vflorio.com │ 🔒 192.168.1.193"
+        description: "VM 3400 · 8 vCPU · 16 GB · sviluppo, git │ 🔒 dev.intranet.vflorio.com │ 🔒 192.168.1.193"
 
     - Coder:
         icon: coder.png
@@ -243,18 +243,6 @@
         href: https://git.dev.intranet.vflorio.com
         siteMonitor: http://192.168.1.193:3000
         description: "Git server │ 🏠 git.dev.intranet.vflorio.com │ 🔌 192.168.1.193:3000 │ 🔒 ssh 192.168.1.193:2222"
-
-    - Container Registry:
-        icon: docker.png
-        href: https://container-registry.dev.intranet.vflorio.com/v2/_catalog
-        siteMonitor: http://192.168.1.193:5000/v2/
-        description: "Docker registry │ 🏠 container-registry.dev.intranet.vflorio.com │ 🔌 192.168.1.193:5000"
-
-    - Verdaccio:
-        icon: verdaccio.png
-        href: https://npm.dev.intranet.vflorio.com
-        siteMonitor: http://192.168.1.193:4873
-        description: "Registry npm │ 🏠 npm.dev.intranet.vflorio.com │ 🔌 192.168.1.193:4873"
 
     - Excalidraw:
         icon: excalidraw.png
